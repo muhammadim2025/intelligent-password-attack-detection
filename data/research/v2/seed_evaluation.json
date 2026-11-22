@@ -1,0 +1,320 @@
+{
+  "seeds": [
+    2026,
+    2027,
+    2028,
+    2029,
+    2030
+  ],
+  "populations": [
+    {
+      "seed": 2026,
+      "rows": 10000,
+      "dataset_sha256": "613e92e611bf1eae3551d85e7da84afc4edd09b67b9bb80417d6c5ab44bb6826",
+      "decision_tree": {
+        "accuracy": 0.8464,
+        "precision": 0.5535714285714286,
+        "recall": 0.8722943722943723,
+        "f1": 0.6773109243697479,
+        "false_positive_rate": 0.15947006869479882,
+        "confusion_matrix": [
+          [
+            1713,
+            325
+          ],
+          [
+            59,
+            403
+          ]
+        ],
+        "true_negative": 1713,
+        "false_positive": 325,
+        "false_negative": 59,
+        "true_positive": 403,
+        "prediction_latency_ms": 0.0006879199994727969
+      },
+      "rule_baseline": {
+        "accuracy": 0.8248,
+        "precision": 0.5571428571428572,
+        "recall": 0.2532467532467532,
+        "f1": 0.3482142857142857,
+        "false_positive_rate": 0.04563297350343474,
+        "confusion_matrix": [
+          [
+            1945,
+            93
+          ],
+          [
+            345,
+            117
+          ]
+        ],
+        "true_negative": 1945,
+        "false_positive": 93,
+        "false_negative": 345,
+        "true_positive": 117,
+        "prediction_latency_ms": 0.0008126400003675372
+      }
+    },
+    {
+      "seed": 2027,
+      "rows": 10000,
+      "dataset_sha256": "20c314e4bca4fb3e1b3e5ee96d4451a202ae8badf241fcfe0dc7e5ddf37bec34",
+      "decision_tree": {
+        "accuracy": 0.8484,
+        "precision": 0.5815899581589958,
+        "recall": 0.8407258064516129,
+        "f1": 0.6875515251442704,
+        "false_positive_rate": 0.1497005988023952,
+        "confusion_matrix": [
+          [
+            1704,
+            300
+          ],
+          [
+            79,
+            417
+          ]
+        ],
+        "true_negative": 1704,
+        "false_positive": 300,
+        "false_negative": 79,
+        "true_positive": 417,
+        "prediction_latency_ms": 0.0005557199998293072
+      },
+      "rule_baseline": {
+        "accuracy": 0.8044,
+        "precision": 0.5187165775401069,
+        "recall": 0.19556451612903225,
+        "f1": 0.2840409956076135,
+        "false_positive_rate": 0.04491017964071856,
+        "confusion_matrix": [
+          [
+            1914,
+            90
+          ],
+          [
+            399,
+            97
+          ]
+        ],
+        "true_negative": 1914,
+        "false_positive": 90,
+        "false_negative": 399,
+        "true_positive": 97,
+        "prediction_latency_ms": 0.0006936800025869162
+      }
+    },
+    {
+      "seed": 2028,
+      "rows": 10000,
+      "dataset_sha256": "9bd2af74db49dea107632e53c9ee3be096b297cee89bc56f7a7d535446b81de3",
+      "decision_tree": {
+        "accuracy": 0.836,
+        "precision": 0.5258855585831063,
+        "recall": 0.8616071428571429,
+        "f1": 0.6531302876480541,
+        "false_positive_rate": 0.1695906432748538,
+        "confusion_matrix": [
+          [
+            1704,
+            348
+          ],
+          [
+            62,
+            386
+          ]
+        ],
+        "true_negative": 1704,
+        "false_positive": 348,
+        "false_negative": 62,
+        "true_positive": 386,
+        "prediction_latency_ms": 0.0005071599967777729
+      },
+      "rule_baseline": {
+        "accuracy": 0.8256,
+        "precision": 0.532258064516129,
+        "recall": 0.22098214285714285,
+        "f1": 0.31230283911671924,
+        "false_positive_rate": 0.04239766081871345,
+        "confusion_matrix": [
+          [
+            1965,
+            87
+          ],
+          [
+            349,
+            99
+          ]
+        ],
+        "true_negative": 1965,
+        "false_positive": 87,
+        "false_negative": 349,
+        "true_positive": 99,
+        "prediction_latency_ms": 0.0006623999972362071
+      }
+    },
+    {
+      "seed": 2029,
+      "rows": 10000,
+      "dataset_sha256": "9ff2c8436a134b08d6f43db5b5974cb41468aca7f40a0740d853dbaff8b27ee7",
+      "decision_tree": {
+        "accuracy": 0.8468,
+        "precision": 0.5238095238095238,
+        "recall": 0.8481927710843373,
+        "f1": 0.6476540938362465,
+        "false_positive_rate": 0.15347721822541965,
+        "confusion_matrix": [
+          [
+            1765,
+            320
+          ],
+          [
+            63,
+            352
+          ]
+        ],
+        "true_negative": 1765,
+        "false_positive": 320,
+        "false_negative": 63,
+        "true_positive": 352,
+        "prediction_latency_ms": 0.0007096000015735626
+      },
+      "rule_baseline": {
+        "accuracy": 0.83,
+        "precision": 0.47093023255813954,
+        "recall": 0.19518072289156627,
+        "f1": 0.27597955706984667,
+        "false_positive_rate": 0.04364508393285372,
+        "confusion_matrix": [
+          [
+            1994,
+            91
+          ],
+          [
+            334,
+            81
+          ]
+        ],
+        "true_negative": 1994,
+        "false_positive": 91,
+        "false_negative": 334,
+        "true_positive": 81,
+        "prediction_latency_ms": 0.001850800000829622
+      }
+    },
+    {
+      "seed": 2030,
+      "rows": 10000,
+      "dataset_sha256": "081abf6cbf761f693510bfb1a484a0720885724576299350ad8b8fdfd12865cb",
+      "decision_tree": {
+        "accuracy": 0.842,
+        "precision": 0.545968882602546,
+        "recall": 0.8391304347826087,
+        "f1": 0.6615252784918595,
+        "false_positive_rate": 0.15735294117647058,
+        "confusion_matrix": [
+          [
+            1719,
+            321
+          ],
+          [
+            74,
+            386
+          ]
+        ],
+        "true_negative": 1719,
+        "false_positive": 321,
+        "false_negative": 74,
+        "true_positive": 386,
+        "prediction_latency_ms": 0.00046491999528370793
+      },
+      "rule_baseline": {
+        "accuracy": 0.8212,
+        "precision": 0.5393939393939394,
+        "recall": 0.1934782608695652,
+        "f1": 0.2848,
+        "false_positive_rate": 0.03725490196078431,
+        "confusion_matrix": [
+          [
+            1964,
+            76
+          ],
+          [
+            371,
+            89
+          ]
+        ],
+        "true_negative": 1964,
+        "false_positive": 76,
+        "false_negative": 371,
+        "true_positive": 89,
+        "prediction_latency_ms": 0.001073999999789521
+      }
+    }
+  ],
+  "decision_tree": {
+    "accuracy": {
+      "mean": 0.84392,
+      "std": 0.005023146424304224,
+      "min": 0.836,
+      "max": 0.8484
+    },
+    "precision": {
+      "mean": 0.5461650703451201,
+      "std": 0.023562917723847852,
+      "min": 0.5238095238095238,
+      "max": 0.5815899581589958
+    },
+    "recall": {
+      "mean": 0.8523901054940148,
+      "std": 0.014235746997306425,
+      "min": 0.8391304347826087,
+      "max": 0.8722943722943723
+    },
+    "f1": {
+      "mean": 0.6654344218980357,
+      "std": 0.016681057780920716,
+      "min": 0.6476540938362465,
+      "max": 0.6875515251442704
+    },
+    "false_positive_rate": {
+      "mean": 0.1579182940347876,
+      "std": 0.007520389526297357,
+      "min": 0.1497005988023952,
+      "max": 0.1695906432748538
+    }
+  },
+  "rule_baseline": {
+    "accuracy": {
+      "mean": 0.8211999999999999,
+      "std": 0.009899494936611653,
+      "min": 0.8044,
+      "max": 0.83
+    },
+    "precision": {
+      "mean": 0.5236883342302344,
+      "std": 0.032586220518308444,
+      "min": 0.47093023255813954,
+      "max": 0.5571428571428572
+    },
+    "recall": {
+      "mean": 0.21169047919881195,
+      "std": 0.025872584723080107,
+      "min": 0.1934782608695652,
+      "max": 0.2532467532467532
+    },
+    "f1": {
+      "mean": 0.301067535501693,
+      "std": 0.0297194824012412,
+      "min": 0.27597955706984667,
+      "max": 0.3482142857142857
+    },
+    "false_positive_rate": {
+      "mean": 0.042768159971300956,
+      "std": 0.0033203043529550173,
+      "min": 0.03725490196078431,
+      "max": 0.04563297350343474
+    }
+  }
+}

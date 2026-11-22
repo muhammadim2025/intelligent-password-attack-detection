@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Manual Detection Test Lab | Security Operations Center{% endblock %}
+{% block content %}
+  <div class="page-heading">
+    <div>
+      <h1>Manual Detection Test Lab</h1>
+      <p>Local synthetic feature testing — no login requests or password guessing</p>
+    </div>
+    <div class="heading-actions">
+      <a class="table-action" href="{{ url_for('dashboard', source='synthetic') }}">View Synthetic Dashboard</a>
+    </div>
+  </div>
+
+  <section class="dashboard-grid">
+    <article class="soc-card span-7">
+      <div class="card-header">
+        <div><h2>Run a Synthetic Prediction</h2><small>Uses the trusted live Decision Tree schema; results are shown before saving</small></div>
+        <span class="status-pill status-warning">Synthetic Test</span>
+      </div>
+      <div class="module-grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="scenario" value="normal">
+          <input type="hidden" name="action" value="predict">
+          <button type="submit" class="primary-button" style="width:100%">Test Normal Login Behavior</button>
+        </form>
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="scenario" value="suspicious">
+          <input type="hidden" name="action" value="predict">
+          <button type="submit" class="danger-button" style="width:100%">Test Suspicious Login Behavior</button>
+        </form>
+      </div>
+      <p style="margin-top:12px;color:#9ca3af;font-size:12px">Predictions run locally against stored feature vectors. Nothing is written to the database until you explicitly save a result.</p>
+    </article>
+
+    <article class="soc-card span-5">
+      <div class="card-header">
+        <div><h2>Latest Result</h2><small>No authentication request is sent</small></div>
+      </div>
+      {% if result %}
+        <div class="metrics-grid">
+          <div class="metric-box"><span>Scenario</span><strong>{{ result["scenario"]|title }}</strong></div>
+          <div class="metric-box"><span>Prediction</span><strong>{{ "Suspicious" if result["prediction"] else "Normal" }}</strong></div>
+          <div class="metric-box"><span>Probability</span><strong>{{ "%.4f"|format(result["probability"]) }}</strong></div>
+          <div class="metric-box"><span>Saved</span><strong>{{ "Yes" if result["saved"] else "No" }}</strong></div>
+        </div>
+        <div style="margin-top:14px;display:grid;gap:10px">
+          {% if not result["saved"] %}
+            <form method="post">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="scenario" value="{{ result['scenario'] }}">
+              <input type="hidden" name="action" value="save">
+              <button type="submit" class="primary-button" style="width:100%">Save Synthetic Test Result</button>
+            </form>
+          {% else %}
+            <a class="primary-button" style="display:inline-grid;place-items:center;text-decoration:none" href="{{ url_for('dashboard', source='synthetic') }}">View Updated Synthetic Dashboard</a>
+          {% endif %}
+        </div>
+      {% else %}
+        <p style="color:#9ca3af">Select a behavior to run a local model prediction.</p>
+      {% endif %}
+    </article>
+
+    {% if result %}
+      <article class="soc-card span-12">
+        <div class="card-header"><div><h2>Model Feature Values</h2><small>Synthetic input vector (actual values used for prediction)</small></div></div>
+        <div class="metrics-grid">
+          {% for name, value in result["features"].items() %}
+            <div class="metric-box"><span>{{ name }}</span><strong class="mono">{{ value }}</strong></div>
+          {% endfor %}
+        </div>
+        {% if result["saved"] and result["prediction"] == 1 %}
+          <p style="margin-top:12px;color:#fdba74">A separate synthetic security alert was created and labeled open in <code>synthetic_test_alerts</code>.</p>
+        {% elif result["saved"] %}
+          <p style="margin-top:12px;color:#86efac">Saved as a synthetic test event in <code>synthetic_test_events</code>. No alert was created.</p>
+        {% endif %}
+      </article>
+    {% endif %}
+  </section>
+{% endblock %}

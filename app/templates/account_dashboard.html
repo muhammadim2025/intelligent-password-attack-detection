@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}User Dashboard | Security Operations Center{% endblock %}
+{% block content %}
+  <div class="auth-shell" style="min-height:calc(100vh - 48px);width:100%">
+    <section class="auth-card wide">
+      <div class="auth-brand">
+        <span class="brand-shield">S</span>
+        <div><strong>Security Operations Center</strong><small>User activity dashboard</small></div>
+      </div>
+      <h1>Recent account activity</h1>
+      <div class="table-wrap">
+        <table class="soc-table">
+          <thead><tr><th>Time</th><th>Result</th><th>Rule classification</th></tr></thead>
+          <tbody>
+            {% for event in events %}
+              <tr>
+                <td class="mono">{{ event["attempted_at"] }}</td>
+                <td><span class="status-pill {{ 'status-success' if event['success'] else 'status-danger' }}">{{ "Success" if event["success"] else "Failure" }}</span></td>
+                <td><span class="status-pill {{ 'status-danger' if event['suspicious'] else 'status-neutral' }}">{{ "Suspicious" if event["suspicious"] else "Normal" }}</span></td>
+              </tr>
+            {% else %}
+              <tr><td colspan="3">No activity recorded.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <form method="post" action="{{ url_for('logout') }}" style="margin-top:18px">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="primary-button">Sign out</button>
+      </form>
+    </section>
+  </div>
+{% endblock %}

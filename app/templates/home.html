@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Security Operations Center{% endblock %}
+{% block content %}
+  <section class="auth-card wide">
+    <div class="auth-brand">
+      <span class="brand-shield">S</span>
+      <div><strong>Security Operations Center</strong><small>Intelligent Password Attack Detection</small></div>
+    </div>
+    <h1>Authentication intelligence for a controlled laboratory</h1>
+    <p class="subtitle">Argon2id password security, synthetic behavior monitoring, Decision Tree research, and administrator alert review.</p>
+    <a class="primary-button" style="display:grid;place-items:center;text-decoration:none" href="{{ url_for('login') }}">Enter monitoring portal</a>
+    <div class="auth-links"><a href="{{ url_for('register') }}">Create a synthetic lab account</a></div>
+  </section>
+{% endblock %}

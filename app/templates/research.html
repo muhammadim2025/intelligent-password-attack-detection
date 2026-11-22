@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Research Analytics | Security Operations Center{% endblock %}
+{% block content %}
+  <div class="page-heading">
+    <div><h1>Research Analytics</h1><p>Synthetic model evaluation and Version 1 / Version 2 comparison</p></div>
+  </div>
+
+  {% set v1 = evaluation %}
+  {% set v2p = v2_evaluation.get("chronological_primary", {}) %}
+  {% set v2t = v2p.get("decision_tree", {}) %}
+  {% set v2b = v2p.get("rule_baseline", {}) %}
+  <section class="dashboard-grid">
+    <article class="soc-card span-8">
+      <div class="card-header"><div><h2>Decision Tree versus Rule Baseline</h2><small>Version 2 held-out results</small></div></div>
+      <div class="chart-wrap"><canvas id="researchCompare"></canvas></div>
+    </article>
+    <article class="soc-card span-4">
+      <div class="card-header"><div><h2>Version 2 Confusion Matrix</h2><small>Chronological test partition</small></div></div>
+      {% set cm = v2t.get("confusion_matrix", [[0,0],[0,0]]) %}
+      <div class="matrix-grid">
+        <div>{{ cm[0][0] }}</div><div class="matrix-danger">{{ cm[0][1] }}</div>
+        <div class="matrix-danger">{{ cm[1][0] }}</div><div>{{ cm[1][1] }}</div>
+      </div>
+      <p style="text-align:center;color:#9ca3af;font-size:11px">Rows: actual · Columns: predicted</p>
+    </article>
+
+    <article class="soc-card span-12">
+      <div class="card-header"><div><h2>Version 1 versus Version 2</h2><small>Clearly labeled synthetic experiments</small></div></div>
+      <div class="metrics-grid">
+        <div class="metric-box"><span>Version 2 Synthetic Rows</span><strong>{{ v2_evaluation.get("rows", 0) }}</strong></div>
+        <div class="metric-box"><span>V1 F1</span><strong>{{ "%.4f"|format(evaluation.get("decision_tree", {}).get("f1", 0)) }}</strong></div>
+        <div class="metric-box"><span>V1 False Positive</span><strong>{{ "%.2f%%"|format(evaluation.get("decision_tree", {}).get("false_positive_rate", 0)*100) }}</strong></div>
+        <div class="metric-box"><span>V2 F1</span><strong>{{ "%.4f"|format(v2t.get("f1", 0)) }}</strong></div>
+        <div class="metric-box"><span>V2 False Positive</span><strong>{{ "%.2f%%"|format(v2t.get("false_positive_rate", 0)*100) }}</strong></div>
+        <div class="metric-box"><span>V1 Rule Baseline F1</span><strong>{{ "%.4f"|format(evaluation.get("rule_baseline", {}).get("f1", 0)) }}</strong></div>
+      </div>
+    </article>
+
+    <article class="soc-card span-6">
+      <div class="card-header"><div><h2>Decision Metrics</h2><small>V2 tree</small></div></div>
+      <div class="metrics-grid">
+        <div class="metric-box"><span>Accuracy</span><strong>{{ "%.4f"|format(v2t.get("accuracy", 0)) }}</strong></div>
+        <div class="metric-box"><span>Precision</span><strong>{{ "%.4f"|format(v2t.get("precision", 0)) }}</strong></div>
+        <div class="metric-box"><span>Recall</span><strong>{{ "%.4f"|format(v2t.get("recall", 0)) }}</strong></div>
+        <div class="metric-box"><span>F1-score</span><strong>{{ "%.4f"|format(v2t.get("f1", 0)) }}</strong></div>
+      </div>
+    </article>
+    <article class="soc-card span-6">
+      <div class="card-header"><div><h2>Feature Importance</h2><small>Held-out permutation importance</small></div></div>
+      <div class="chart-wrap"><canvas id="featureChart"></canvas></div>
+    </article>
+  </section>
+
+  <script id="research-data" type="application/json">
+    {
+      "tree": {{ v2t|tojson }},
+      "baseline": {{ v2b|tojson }},
+      "importance": {{ v2_evaluation.get("feature_importance", {}).get("permutation", {})|tojson }}
+    }
+  </script>
+  <script>
+    (function(){
+      const d=JSON.parse(document.getElementById("research-data").textContent);
+      const labels=["Accuracy","Precision","Recall","F1"];
+      const fi=Object.entries(d.importance).sort((a,b)=>b[1].mean-a[1].mean);
+      function render() {
+        if (!window.socChartFallback) return;
+        window.socChartFallback.bars(
+          document.getElementById("researchCompare"),
+          [d.tree.accuracy,d.tree.precision,d.tree.recall,d.tree.f1],
+          labels,
+          "#3b82f6"
+        );
+        window.socChartFallback.bars(
+          document.getElementById("featureChart"),
+          fi.map(x=>Math.max(0,x[1].mean)),
+          fi.map(x=>x[0]),
+          "#f97316"
+        );
+        if (!window.Chart) return;
+        new Chart(document.getElementById("researchCompare"),{type:"bar",data:{labels,datasets:[
+          {label:"Decision Tree",data:[d.tree.accuracy,d.tree.precision,d.tree.recall,d.tree.f1],backgroundColor:"#3b82f6",borderRadius:4},
+          {label:"Rule baseline",data:[d.baseline.accuracy,d.baseline.precision,d.baseline.recall,d.baseline.f1],backgroundColor:"#f97316",borderRadius:4}
+        ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"bottom"}},scales:{y:{beginAtZero:true,max:1,grid:{color:"rgba(255,255,255,.055)"}}}}});
+        new Chart(document.getElementById("featureChart"),{type:"bar",data:{labels:fi.map(x=>x[0]),datasets:[{label:"Permutation importance",data:fi.map(x=>x[1].mean),backgroundColor:"#f97316",borderRadius:4}]},options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,grid:{color:"rgba(255,255,255,.055)"}}}}});
+      }
+      requestAnimationFrame(()=>setTimeout(render,50));
+    })();
+  </script>
+{% endblock %}

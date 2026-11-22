@@ -1,0 +1,43 @@
+# Virtual environment
+.venv/
+.venv312/
+.venv-1/
+venv/
+env/
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.crt
+credentials*.json
+secrets*.json
+
+# Logs
+*.log
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Local database, generated lab passwords, and trained model artifacts
+instance/*
+!instance/.gitkeep
+data/synthetic/*.csv
+*.sqlite
+*.sqlite3
+*.db
+*.joblib
+*.pkl
+!model_artifacts/decision_tree.joblib
+
+# Editor
+.vscode/
+.idea/

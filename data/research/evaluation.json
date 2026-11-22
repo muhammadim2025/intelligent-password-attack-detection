@@ -1,0 +1,55 @@
+{
+  "synthetic": true,
+  "rows": 10000,
+  "train_rows": 7500,
+  "test_rows": 2500,
+  "best_parameters": {
+    "max_depth": 4,
+    "min_samples_leaf": 20,
+    "min_samples_split": 10
+  },
+  "decision_tree": {
+    "accuracy": 0.9412,
+    "precision": 0.949685534591195,
+    "recall": 0.8400556328233658,
+    "f1": 0.8915129151291513,
+    "false_positive_rate": 0.017967434025828188,
+    "confusion_matrix": [
+      [
+        1749,
+        32
+      ],
+      [
+        115,
+        604
+      ]
+    ],
+    "true_negative": 1749,
+    "false_positive": 32,
+    "false_negative": 115,
+    "true_positive": 604,
+    "prediction_latency_ms": 0.0007084799995936919
+  },
+  "rule_baseline": {
+    "accuracy": 0.8736,
+    "precision": 0.9507829977628636,
+    "recall": 0.5910987482614742,
+    "f1": 0.7289879931389366,
+    "false_positive_rate": 0.012352610892756879,
+    "confusion_matrix": [
+      [
+        1759,
+        22
+      ],
+      [
+        294,
+        425
+      ]
+    ],
+    "true_negative": 1759,
+    "false_positive": 22,
+    "false_negative": 294,
+    "true_positive": 425,
+    "prediction_latency_ms": 0.008581080000294604
+  }
+}

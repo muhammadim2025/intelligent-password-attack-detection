@@ -1,0 +1,510 @@
+{% extends "base.html" %}
+{% block title %}Security Operations Center{% endblock %}
+{% block content %}
+  <div class="page-heading">
+    <div>
+      <h1>Security Operations Center</h1>
+      <p>
+        {% if synthetic_dashboard %}
+          Synthetic manual detection tests (stored records only)
+        {% else %}
+          Real-time authentication monitoring and incident intelligence
+        {% endif %}
+      </p>
+    </div>
+    <div class="heading-actions">
+      {% if manual_detection_enabled %}
+      <form method="get" action="{{ url_for('dashboard') }}" class="source-selector">
+        <label for="data-source">Data Source</label>
+        <select id="data-source" name="source" onchange="this.form.submit()">
+          <option value="real" {{ 'selected' if data_source == 'real' else '' }}>Real Authentication Events</option>
+          <option value="synthetic" {{ 'selected' if data_source == 'synthetic' else '' }}>Synthetic Detection Tests</option>
+        </select>
+      </form>
+      {% endif %}
+      <button class="filter-button" type="button">Last 24 hours⌄</button>
+      <button class="icon-button" type="button" aria-label="Refresh">↻</button>
+    </div>
+  </div>
+
+  {% if synthetic_dashboard %}
+    <div class="synthetic-banner-inline" role="status">SYNTHETIC TEST DATA — showing only saved records from <code>synthetic_test_events</code> and <code>synthetic_test_alerts</code>.</div>
+    {% if not synthetic_has_data %}
+      <div class="empty-state" role="status">No synthetic detection tests have been saved yet. Use the Manual Detection Test Lab to save a normal or suspicious result, then return to this view.</div>
+    {% endif %}
+  {% endif %}
+
+  <section class="stat-grid" aria-label="Security statistics">
+    <article class="stat-card">
+      <div class="stat-card-header"><span class="stat-label">Suspicious detection</span><span class="stat-icon">▲</span></div>
+      <div class="stat-value" id="statSuspiciousValue" data-countup="{{ counts['suspicious'] }}">{{ counts["suspicious"] }}</div>
+      <div class="stat-foot" id="statSuspiciousFoot">{{ "Detected suspicious synthetic predictions" if synthetic_dashboard else "Detected suspicious events" }}</div>
+      <div class="mini-trend mini-trend-red" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+    </article>
+    <article class="stat-card">
+      <div class="stat-card-header"><span class="stat-label" id="statEventsLabel">{{ "Total synthetic tests" if synthetic_dashboard else "Authentication events" }}</span><span class="stat-icon">◉</span></div>
+      <div class="stat-value" id="statEventsValue" data-countup="{{ counts['events'] }}">{{ counts["events"] }}</div>
+      <div class="stat-foot" id="statEventsFoot">{{ "Saved manual detection tests" if synthetic_dashboard else "All login attempts" }}</div>
+      <div class="mini-heatmap" aria-hidden="true">{% for i in range(20) %}<span></span>{% endfor %}</div>
+    </article>
+    <article class="stat-card success">
+      <div class="stat-card-header"><span class="stat-label" id="statNormalLabel">{{ "Normal predictions" if synthetic_dashboard else "Success rate" }}</span><span class="stat-icon">✓</span></div>
+      <div class="stat-value" id="statNormalValue">
+        {% if synthetic_dashboard %}
+          {{ ((counts["normal"] / counts["events"] * 100) if counts["events"] else 0)|round(1) }}%
+        {% else %}
+          {{ ((counts["successful"] / counts["events"] * 100) if counts["events"] else 0)|round(1) }}%
+        {% endif %}
+      </div>
+      <div class="stat-foot" id="statNormalFoot">
+        {% if synthetic_dashboard %}
+          {{ counts["normal"] }} normal synthetic predictions
+        {% else %}
+          {{ counts["successful"] }} successful logins
+        {% endif %}
+      </div>
+      <div class="mini-bars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+    </article>
+    <article class="stat-card">
+      <div class="stat-card-header"><span class="stat-label">Recent incidents</span><span class="stat-icon">⚑</span></div>
+      <div class="stat-value" id="statIncidentsValue" data-countup="{{ (alert_counts['open'] or 0) + (alert_counts['reviewed'] or 0) }}">{{ (alert_counts["open"] or 0) + (alert_counts["reviewed"] or 0) }}</div>
+      <div class="stat-foot" id="statIncidentsFoot">{{ alert_counts["open"] or 0 }} open · {{ "synthetic alerts" if synthetic_dashboard else "medium / high severity" }}</div>
+    </article>
+  </section>
+
+  <section class="dashboard-grid">
+    {% if manual_detection_enabled %}
+    <article class="soc-card span-12 manual-lab-card" id="manualLabCard">
+      <details class="manual-lab-details" id="manualLabDetails" open>
+        <summary class="manual-lab-summary">
+          <div class="card-header manual-lab-header">
+            <div>
+              <h2>Manual Detection Test Lab</h2>
+              <small>Administrator-only local synthetic prediction testing (no login requests, no password guessing)</small>
+            </div>
+            <div class="manual-lab-badges">
+              <span class="status-pill status-warning">SYNTHETIC TEST DATA</span>
+              <span class="table-action manual-lab-toggle-hint" aria-hidden="true">Collapse/Expand</span>
+            </div>
+          </div>
+        </summary>
+        <div class="manual-lab-body"
+             id="manualDetectionLab"
+             data-predict-url="{{ url_for('manual_detection_predict_api') }}"
+             data-save-url="{{ url_for('manual_detection_save_api') }}"
+             data-csrf-token="{{ csrf_token() }}"
+             data-source="{{ data_source }}">
+          <div class="manual-lab-actions">
+            <button type="button" class="primary-button" id="predictNormalBtn" data-scenario="normal">Test Normal Login Behavior</button>
+            <button type="button" class="danger-button" id="predictSuspiciousBtn" data-scenario="suspicious">Test Suspicious Login Behavior</button>
+            <button type="button" class="table-action" id="saveSyntheticBtn" disabled>Save Synthetic Test Result</button>
+            <a class="table-action" id="switchToSyntheticLink" href="{{ url_for('dashboard', source='synthetic') }}">Switch to Synthetic Detection Tests</a>
+            <a class="table-action" href="{{ url_for('manual_detection_lab') }}">Open Standalone Lab</a>
+          </div>
+          <p class="manual-lab-note">Predictions use the existing trusted Decision Tree and the eight authentication features. Results are shown before saving; only <strong>Save Synthetic Test Result</strong> persists data to <code>synthetic_test_events</code>/<code>synthetic_test_alerts</code>.</p>
+          <div id="manualLabStatus" class="manual-lab-status" role="status" aria-live="polite"></div>
+          <div id="manualLabResult" class="manual-lab-result" hidden>
+            <div class="metrics-grid manual-lab-metrics">
+              <div class="metric-box"><span>Scenario</span><strong id="labScenario">—</strong></div>
+              <div class="metric-box"><span>Prediction</span><strong id="labPrediction">—</strong></div>
+              <div class="metric-box"><span>Probability</span><strong id="labProbability">—</strong></div>
+              <div class="metric-box"><span>Status</span><strong id="labSavedState">Not saved</strong></div>
+            </div>
+            <div class="card-header" style="margin-top:14px"><div><h3 style="margin:0;font-size:14px">Model Feature Values (Synthetic Test)</h3><small>Actual input vector used for prediction</small></div></div>
+            <div class="metrics-grid" id="manualLabFeatures"></div>
+          </div>
+        </div>
+      </details>
+    </article>
+    {% endif %}
+    <article class="soc-card span-7">
+      <div class="card-header">
+        <div>
+          <h2>{{ "Synthetic Test Activity" if synthetic_dashboard else "Authentication Activity" }}</h2>
+          <small>{{ "Normal versus suspicious predictions over time" if synthetic_dashboard else "Success versus failure timeline" }}</small>
+        </div>
+        <div class="card-actions"><button class="table-action" type="button">14D</button></div>
+      </div>
+      <div class="chart-wrap"><canvas id="activityChart" aria-label="Activity chart"></canvas></div>
+    </article>
+    <article class="soc-card span-5">
+      <div class="card-header">
+        <div>
+          <h2>{{ "Normal vs Suspicious Distribution" if synthetic_dashboard else "Event Distribution" }}</h2>
+          <small>{{ "Stored synthetic predictions" if synthetic_dashboard else "Normal and suspicious activity" }}</small>
+        </div>
+      </div>
+      <div class="chart-wrap compact"><canvas id="distributionChart"></canvas></div>
+    </article>
+
+    <article class="soc-card span-8">
+      <div class="card-header">
+        <div>
+          <h2>Recent Security Incidents</h2>
+          <small>{{ "Latest suspicious synthetic test results" if synthetic_dashboard else "Latest suspicious authentication events" }}</small>
+        </div>
+        <a class="table-action" href="{{ url_for('authentication_events') if not synthetic_dashboard else url_for('dashboard', source='synthetic') }}">View all</a>
+      </div>
+      <div class="table-wrap">
+        <table class="soc-table">
+          {% if synthetic_dashboard %}
+          <thead><tr><th>Administrator</th><th>Scenario</th><th>Time</th><th>Prediction</th><th>Severity</th></tr></thead>
+          <tbody>
+            {% for event in recent_events[:8] %}
+              <tr>
+                <td class="mono">{{ event["username"] }}</td>
+                <td>{{ event["scenario"]|title }}</td>
+                <td class="mono">{{ event["attempted_at"][11:19] if event["attempted_at"] else "—" }}</td>
+                <td><span class="status-pill status-danger">Suspicious</span></td>
+                <td><span class="status-pill {{ 'status-danger' if event['severity'] == 'high' else 'status-warning' }}">{{ event["severity"]|title if event["severity"] else ("High" if event["model_probability"] is not none and event["model_probability"] >= 0.8 else "Medium") }}</span></td>
+              </tr>
+            {% else %}
+              <tr><td colspan="5">No saved suspicious synthetic tests.</td></tr>
+            {% endfor %}
+          </tbody>
+          {% else %}
+          <thead><tr><th>Username</th><th>Source</th><th>Time</th><th>AI</th><th>Severity</th></tr></thead>
+          <tbody>
+            {% for event in recent_events[:8] %}
+              <tr>
+                <td class="mono">{{ event["username"] }}</td>
+                <td class="mono">{{ event["source_ip"][:18] }}</td>
+                <td>{{ event["attempted_at"][11:19] }}</td>
+                <td><span class="status-pill {{ 'status-danger' if event['model_prediction'] == 1 else 'status-neutral' }}">{{ "Suspicious" if event["model_prediction"] == 1 else "Normal" }}</span></td>
+                <td><span class="status-pill {{ 'status-danger' if event['model_probability'] is not none and event['model_probability'] >= 0.8 else ('status-warning' if event['model_prediction'] == 1 else 'status-success') }}">{{ "High" if event['model_probability'] is not none and event['model_probability'] >= 0.8 else ("Medium" if event['model_prediction'] == 1 else "Low") }}</span></td>
+              </tr>
+            {% else %}
+              <tr><td colspan="5">No authentication incidents recorded.</td></tr>
+            {% endfor %}
+          </tbody>
+          {% endif %}
+        </table>
+      </div>
+    </article>
+    <article class="soc-card span-4">
+      <div class="card-header">
+        <div><h2>Alert Review Status</h2><small>{{ "Synthetic test alerts" if synthetic_dashboard else "Reviewed versus open" }}</small></div>
+      </div>
+      <div class="chart-wrap compact"><canvas id="alertChart"></canvas></div>
+    </article>
+
+    <article class="soc-card span-8">
+      <div class="card-header">
+        <div><h2>Security Monitoring Modules</h2><small>Actual project capabilities</small></div>
+      </div>
+      <div class="module-grid">
+        <a class="module-card" href="{{ url_for('dashboard', source=data_source) }}"><span class="module-icon blue">◉</span><span><b>Secure Authentication</b><small>Argon2id and sessions</small></span></a>
+        <a class="module-card" href="{{ url_for('dashboard', source=data_source) }}"><span class="module-icon orange">▲</span><span><b>Decision Tree Detection</b><small>Behavioral prediction</small></span></a>
+        <a class="module-card" href="{{ url_for('research_dashboard') }}"><span class="module-icon purple">⇄</span><span><b>Rule-Based Comparison</b><small>Baseline evaluation</small></span></a>
+        <a class="module-card" href="{{ url_for('security_alerts') if not synthetic_dashboard else url_for('dashboard', source='synthetic') }}"><span class="module-icon red">⚑</span><span><b>Security Alerts</b><small>{{ alert_counts["open"] or 0 }} open alerts</small></span></a>
+        <a class="module-card" href="{{ url_for('authentication_events') }}"><span class="module-icon green">✓</span><span><b>Login History</b><small>{{ "Synthetic test records" if synthetic_dashboard else "Authentication records" }}</small></span></a>
+        <a class="module-card" href="{{ url_for('research_dashboard') }}"><span class="module-icon blue">⌁</span><span><b>Research Analytics</b><small>Metrics and charts</small></span></a>
+        <a class="module-card" href="{{ url_for('dashboard', source=data_source) }}"><span class="module-icon orange">♙</span><span><b>Account Monitoring</b><small>{{ counts["users"] }} lab accounts</small></span></a>
+        <a class="module-card" href="{{ url_for('dashboard', source=data_source) }}"><span class="module-icon purple">#</span><span><b>Password Hashing</b><small>Argon2id protection</small></span></a>
+      </div>
+    </article>
+    <article class="soc-card analytics-panel span-4">
+      <div class="card-header">
+        <div><h2>Detection Indicators</h2><small>{{ "Synthetic test profile" if synthetic_dashboard else "Detection indicator profile" }}</small></div>
+        <div class="analytics-select">All time⌄</div>
+      </div>
+      <div class="analytics-orbit" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div class="analytics-lines">
+        {% if synthetic_dashboard %}
+          <div><span>Normal predictions</span><b>{{ counts["normal"] }}</b></div>
+          <div><span>Suspicious predictions</span><b>{{ counts["suspicious"] }}</b></div>
+          <div><span>Synthetic alerts</span><b>{{ (alert_counts["open"] or 0) + (alert_counts["reviewed"] or 0) }}</b></div>
+        {% else %}
+          <div><span>Failed login pressure</span><b>{{ counts["failed"] }}</b></div>
+          <div><span>Suspicious concentration</span><b>{{ counts["suspicious"] }}</b></div>
+          <div><span>Alert coverage</span><b>{{ alerts|length }}</b></div>
+        {% endif %}
+      </div>
+    </article>
+
+    <article class="soc-card span-7">
+      <div class="card-header">
+        <div>
+          <h2>{{ "Synthetic Test Timeline" if synthetic_dashboard else "Authentication Timeline" }}</h2>
+          <small>{{ "Saved tests over time" if synthetic_dashboard else "Attempts over time" }}</small>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="timelineChart"></canvas></div>
+    </article>
+    <article class="soc-card span-5">
+      <div class="card-header">
+        <div>
+          <h2>{{ "Tests by Hour" if synthetic_dashboard else "Login Attempts by Hour" }}</h2>
+          <small>{{ "24-hour synthetic distribution" if synthetic_dashboard else "24-hour distribution" }}</small>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="hourChart"></canvas></div>
+    </article>
+
+    <article class="soc-card span-12">
+      <div class="card-header">
+        <div><h2>Detection Trends</h2><small>{{ "Synthetic detection indicators from stored records" if synthetic_dashboard else "Live detection indicators" }}</small></div>
+        <a class="table-action" href="{{ url_for('research_dashboard') }}">Research analytics</a>
+      </div>
+      <div class="metrics-grid">
+        {% if synthetic_dashboard %}
+          <div class="metric-box"><span>Normal predictions</span><strong class="mono">{{ counts["normal"] }}</strong></div>
+          <div class="metric-box"><span>Suspicious predictions</span><strong class="mono">{{ counts["suspicious"] }}</strong></div>
+          <div class="metric-box"><span>Open alerts</span><strong class="mono">{{ alert_counts["open"] or 0 }}</strong></div>
+          <div class="metric-box"><span>Reviewed alerts</span><strong class="mono">{{ alert_counts["reviewed"] or 0 }}</strong></div>
+        {% else %}
+          <div class="metric-box"><span>Successful logins</span><strong class="mono">{{ counts["successful"] }}</strong></div>
+          <div class="metric-box"><span>Failed logins</span><strong class="mono">{{ counts["failed"] }}</strong></div>
+          <div class="metric-box"><span>Suspicious events</span><strong class="mono">{{ counts["suspicious"] }}</strong></div>
+          <div class="metric-box"><span>Lab accounts</span><strong class="mono">{{ counts["users"] }}</strong></div>
+        {% endif %}
+      </div>
+    </article>
+  </section>
+
+  <script id="dashboard-data" type="application/json">
+    {
+      "dataSource": {{ data_source|tojson }},
+      "events": {{ counts["events"]|tojson }},
+      "timeline": {{ timeline|tojson }},
+      "hours": {{ by_hour|tojson }},
+      "success": {{ counts.get("successful", 0)|tojson if synthetic_dashboard else counts["successful"]|tojson }},
+      "failure": {{ counts.get("failed", 0)|tojson if synthetic_dashboard else counts["failed"]|tojson }},
+      "normal": {{ (counts["normal"] if synthetic_dashboard else (counts["events"] - counts["suspicious"]))|tojson }},
+      "suspicious": {{ counts["suspicious"]|tojson }},
+      "open": {{ (alert_counts["open"] or 0)|tojson }},
+      "reviewed": {{ (alert_counts["reviewed"] or 0)|tojson }},
+      "syntheticActivity": {{ synthetic_activity|default({"bucketed_by_timestamp": false, "nonempty_buckets": 0, "single_nonempty_bucket": false})|tojson }}
+    }
+  </script>
+  <script>
+    (function () {
+      const initial = JSON.parse(document.getElementById("dashboard-data").textContent);
+      const charts = {};
+      function destroyChart(id) {
+        if (charts[id]) { try { charts[id].destroy(); } catch (e) {} delete charts[id]; }
+      }
+      function byId(id) { return document.getElementById(id); }
+      function toNumber(value) { return Number(value || 0); }
+
+      function renderDashboard(payload) {
+        const data = payload || initial;
+        const synthetic = data.dataSource === "synthetic";
+        const grid = { color: "rgba(255,255,255,.055)" };
+        const tooltip = {
+          backgroundColor: "#202938",
+          borderColor: "#4b5563",
+          borderWidth: 1,
+          titleColor: "#f8fafc",
+          bodyColor: "#cbd5e1",
+          callbacks: { label: (ctx) => `${ctx.dataset.label}: ${Math.round(ctx.parsed.y ?? ctx.parsed ?? 0)}` }
+        };
+        const timeline = data.timeline || [];
+        const timelineLabels = timeline.map((x) => x.label || x.day);
+        const normalSeries = timeline.map((x) => synthetic ? toNumber(x.normal) : toNumber(x.successes));
+        const suspiciousSeries = timeline.map((x) => synthetic ? toNumber(x.suspicious) : toNumber(x.failures));
+        const nonemptyBuckets = timeline.filter((x) => toNumber(x.attempts) > 0).length;
+        const syntheticSingleBucket = synthetic && toNumber(data.events) > 0 && nonemptyBuckets <= 1;
+        const integerY = { grid, beginAtZero: true, ticks: { precision: 0, stepSize: 1 }, title: { display: true, text: "Count" } };
+
+        if (window.socChartFallback) {
+          const fallback = window.socChartFallback;
+          if (fallback.multiLine) {
+            fallback.multiLine(byId("activityChart"), timelineLabels, [
+              { label: synthetic ? "Normal predictions" : "Success", data: normalSeries, color: "#3b82f6", fill: "rgba(59,130,246,.18)" },
+              { label: synthetic ? "Suspicious predictions" : "Failure", data: suspiciousSeries, color: "#ef4444", fill: "rgba(239,68,68,.08)" }
+            ], { xLabel: synthetic ? "Time bucket" : "Day", yLabel: "Count", singleBucketAsBar: syntheticSingleBucket });
+          } else {
+            fallback.line(byId("activityChart"), normalSeries, "#3b82f6", "rgba(59,130,246,.18)");
+          }
+          fallback.doughnut(byId("distributionChart"), [toNumber(data.normal), toNumber(data.suspicious)], ["#3b82f6", "#ef4444"]);
+          fallback.doughnut(byId("alertChart"), [toNumber(data.open), toNumber(data.reviewed)], ["#f97316", "#22c55e"]);
+          if (synthetic && fallback.groupedBars) {
+            fallback.groupedBars(byId("timelineChart"), timelineLabels, [
+              { label: "Normal", data: normalSeries, color: "#3b82f6" },
+              { label: "Suspicious", data: suspiciousSeries, color: "#ef4444" }
+            ], { xLabel: "Time bucket", yLabel: "Count" });
+          } else {
+            fallback.bars(byId("timelineChart"), timeline.map((x) => toNumber(x.attempts)), timelineLabels, ["#3b82f6", "#ef4444"]);
+          }
+          fallback.bars(byId("hourChart"), (data.hours || []).map((x) => toNumber(x.attempts)), (data.hours || []).map((x) => String(x.hour).padStart(2, "0") + ":00"), "#3b82f6");
+        }
+
+        if (!window.Chart) return;
+        const activityType = syntheticSingleBucket ? "bar" : "line";
+        destroyChart("activityChart");
+        charts.activityChart = new Chart(byId("activityChart"), {
+          type: activityType,
+          data: { labels: timelineLabels, datasets: [
+            { label: synthetic ? "Normal predictions" : "Success", data: normalSeries, borderColor: "#3b82f6", backgroundColor: syntheticSingleBucket ? "#3b82f6" : "rgba(59,130,246,.18)", fill: !syntheticSingleBucket, tension: 0.3, borderWidth: 2, pointRadius: synthetic ? 5 : 2, pointHoverRadius: 6, pointBackgroundColor: "#3b82f6", borderRadius: syntheticSingleBucket ? 6 : 0 },
+            { label: synthetic ? "Suspicious predictions" : "Failure", data: suspiciousSeries, borderColor: "#ef4444", backgroundColor: syntheticSingleBucket ? "#ef4444" : "rgba(239,68,68,.08)", fill: !syntheticSingleBucket, tension: 0.3, borderWidth: 2, pointRadius: synthetic ? 5 : 2, pointHoverRadius: 6, pointBackgroundColor: "#ef4444", borderRadius: syntheticSingleBucket ? 6 : 0 }
+          ]},
+          options: { responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false }, plugins: { legend: { position: "bottom" }, tooltip }, scales: { x: { grid, title: { display: true, text: synthetic ? "Time bucket (from tested_at)" : "Day" } }, y: integerY } }
+        });
+        destroyChart("distributionChart");
+        charts.distributionChart = new Chart(byId("distributionChart"), {
+          type: "doughnut",
+          data: { labels: ["Normal", "Suspicious"], datasets: [{ data: [toNumber(data.normal), toNumber(data.suspicious)], backgroundColor: ["#3b82f6", "#ef4444"], borderWidth: 0, cutout: "68%" }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" }, tooltip } }
+        });
+        destroyChart("alertChart");
+        charts.alertChart = new Chart(byId("alertChart"), {
+          type: "doughnut",
+          data: { labels: ["Open", "Reviewed"], datasets: [{ data: [toNumber(data.open), toNumber(data.reviewed)], backgroundColor: ["#f97316", "#22c55e"], borderWidth: 0, cutout: "68%" }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" }, tooltip } }
+        });
+        destroyChart("timelineChart");
+        charts.timelineChart = new Chart(byId("timelineChart"), {
+          type: "bar",
+          data: { labels: timelineLabels, datasets: [
+            { label: synthetic ? "Normal predictions" : "Success", data: normalSeries, backgroundColor: "#3b82f6", borderRadius: 3 },
+            { label: synthetic ? "Suspicious predictions" : "Suspicious", data: synthetic ? suspiciousSeries : timeline.map((x) => toNumber(x.suspicious)), backgroundColor: "#ef4444", borderRadius: 3 }
+          ]},
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" }, tooltip }, scales: { x: { stacked: !synthetic, grid, title: { display: true, text: synthetic ? "Time bucket (from tested_at)" : "Day" } }, y: { stacked: !synthetic, grid, beginAtZero: true, ticks: { precision: 0, stepSize: 1 }, title: { display: true, text: "Count" } } } }
+        });
+        destroyChart("hourChart");
+        charts.hourChart = new Chart(byId("hourChart"), {
+          type: "bar",
+          data: { labels: (data.hours || []).map((x) => String(x.hour).padStart(2, "0") + ":00"), datasets: [{ label: synthetic ? "Tests" : "Attempts", data: (data.hours || []).map((x) => toNumber(x.attempts)), backgroundColor: "#3b82f6", borderRadius: 4 }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip }, scales: { x: { grid: { display: false }, title: { display: true, text: "Hour" } }, y: { beginAtZero: true, grid, ticks: { precision: 0, stepSize: 1 }, title: { display: true, text: "Count" } } } }
+        });
+      }
+
+      function text(id, value) { const el = byId(id); if (el) el.textContent = value; }
+      function applySyntheticPayload(syntheticData) {
+        if (!syntheticData || initial.dataSource !== "synthetic") return;
+        initial.events = toNumber(syntheticData.counts.events);
+        initial.suspicious = toNumber(syntheticData.counts.suspicious);
+        initial.normal = toNumber(syntheticData.counts.normal);
+        initial.open = toNumber(syntheticData.alert_counts.open);
+        initial.reviewed = toNumber(syntheticData.alert_counts.reviewed);
+        initial.timeline = syntheticData.timeline || [];
+        initial.hours = syntheticData.by_hour || [];
+        initial.syntheticActivity = syntheticData.synthetic_activity || initial.syntheticActivity;
+        renderDashboard(initial);
+
+        const events = initial.events;
+        const normal = initial.normal;
+        const suspicious = initial.suspicious;
+        const open = initial.open;
+        const reviewed = initial.reviewed;
+        text("statSuspiciousValue", String(suspicious));
+        text("statEventsValue", String(events));
+        text("statIncidentsValue", String(open + reviewed));
+        text("statNormalValue", ((events ? (normal / events) * 100 : 0).toFixed(1)) + "%");
+        text("statSuspiciousFoot", "Detected suspicious synthetic predictions");
+        text("statEventsFoot", "Saved manual detection tests");
+        text("statNormalFoot", normal + " normal synthetic predictions");
+        text("statIncidentsFoot", open + " open · synthetic alerts");
+        const banner = document.querySelector(".synthetic-banner-inline");
+        if (banner) banner.style.display = "block";
+      }
+
+      window.socDashboard = { data: initial, charts, render: renderDashboard, applySyntheticPayload };
+      requestAnimationFrame(() => setTimeout(() => renderDashboard(initial), 50));
+
+      const lab = byId("manualDetectionLab");
+      if (!lab) return;
+      const predictButtons = [byId("predictNormalBtn"), byId("predictSuspiciousBtn")].filter(Boolean);
+      const saveButton = byId("saveSyntheticBtn");
+      const statusEl = byId("manualLabStatus");
+      const resultWrap = byId("manualLabResult");
+      const featuresWrap = byId("manualLabFeatures");
+      let currentPrediction = null;
+      let requestInFlight = false;
+
+      function setStatus(message, kind) {
+        if (!statusEl) return;
+        statusEl.textContent = message || "";
+        statusEl.className = "manual-lab-status" + (kind ? " " + kind : "");
+      }
+      function setBusy(busy) {
+        requestInFlight = busy;
+        predictButtons.forEach((btn) => btn.disabled = busy);
+        if (saveButton) saveButton.disabled = busy || !currentPrediction || currentPrediction.saved;
+      }
+      function renderPrediction(result) {
+        if (!resultWrap || !featuresWrap) return;
+        resultWrap.hidden = false;
+        text("labScenario", (result.scenario || "").charAt(0).toUpperCase() + (result.scenario || "").slice(1));
+        text("labPrediction", result.label || (result.prediction === 1 ? "Suspicious" : "Normal"));
+        text("labProbability", (toNumber(result.probability)).toFixed(4));
+        text("labSavedState", result.saved ? "Saved (synthetic)" : "Not saved");
+        featuresWrap.innerHTML = "";
+        Object.entries(result.features || {}).forEach(([name, value]) => {
+          const box = document.createElement("div");
+          box.className = "metric-box";
+          const span = document.createElement("span");
+          span.textContent = name;
+          const strong = document.createElement("strong");
+          strong.className = "mono";
+          strong.textContent = String(value);
+          box.appendChild(span);
+          box.appendChild(strong);
+          featuresWrap.appendChild(box);
+        });
+      }
+
+      async function postLab(url, payload) {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": lab.dataset.csrfToken || "",
+            "X-Requested-With": "XMLHttpRequest"
+          },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json().catch(() => ({ ok: false, error: "Unexpected response." }));
+        if (!response.ok || data.ok === false) {
+          throw new Error(data.error || "Request failed.");
+        }
+        return data;
+      }
+
+      predictButtons.forEach((button) => {
+        button.addEventListener("click", async () => {
+          if (requestInFlight) return;
+          const scenario = button.dataset.scenario;
+          setBusy(true);
+          setStatus("Running synthetic prediction against the trusted Decision Tree...", "info");
+          try {
+            const result = await postLab(lab.dataset.predictUrl, { scenario });
+            currentPrediction = { ...result, saved: false };
+            renderPrediction(currentPrediction);
+            if (saveButton) saveButton.disabled = false;
+            setStatus("Prediction complete (SYNTHETIC TEST DATA). Review the result, then save explicitly if needed.", "info");
+          } catch (error) {
+            setStatus(error.message || "Prediction failed.", "error");
+          } finally {
+            setBusy(false);
+          }
+        });
+      });
+
+      if (saveButton) {
+        saveButton.addEventListener("click", async () => {
+          if (requestInFlight || !currentPrediction || currentPrediction.saved) return;
+          setBusy(true);
+          setStatus("Saving synthetic test result to isolated synthetic tables...", "info");
+          try {
+            const result = await postLab(lab.dataset.saveUrl, { scenario: currentPrediction.scenario });
+            currentPrediction = { ...currentPrediction, ...result, saved: true };
+            renderPrediction(currentPrediction);
+            saveButton.disabled = true;
+            if (initial.dataSource === "synthetic") {
+              applySyntheticPayload(result.synthetic_data);
+              setStatus("Saved (SYNTHETIC TEST DATA). Synthetic Detection Tests statistics and charts updated from stored database records. Real authentication records were not modified.", "success");
+            } else {
+              setStatus("Saved (SYNTHETIC TEST DATA) to synthetic_test_events/synthetic_test_alerts only. Real authentication statistics were not changed. Switch to Synthetic Detection Tests to view updated charts.", "success");
+            }
+          } catch (error) {
+            setStatus(error.message || "Save failed.", "error");
+          } finally {
+            setBusy(false);
+          }
+        });
+      }
+    })();
+  </script>
+{% endblock %}

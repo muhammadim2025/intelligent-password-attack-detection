@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "seed": 2026,
+  "rows": 10000,
+  "accounts": 400,
+  "sources": 240,
+  "holdout_source_count": 48,
+  "feature_columns": [
+    "failed_attempts_5min",
+    "login_attempts_5min",
+    "unique_accounts_5min",
+    "new_device",
+    "login_hour",
+    "source_failure_rate",
+    "time_since_last_login",
+    "recent_account_failure_count"
+  ],
+  "ground_truth": "Scenario-based: suspicious for the suspicious scenario; normal for normal and unusual-legitimate scenarios.",
+  "uncertainty_model": "No random label inversion. Scenario overlap is created through stochastic behavior and shared histories.",
+  "rolling_windows": "5-minute rolling windows using event history with timestamps <= the current event.",
+  "new_device": "1 only when the source-account pair has not appeared before.",
+  "time_since_last_login": "Seconds since the account's previous event; no future events.",
+  "split": "Chronological 75/25 primary split plus a 48-source holdout group-disjoint evaluation.",
+  "scenario_counts": {
+    "normal|known_device": 2319,
+    "normal|occasional_failure": 2366,
+    "normal|routine": 2422,
+    "suspicious|account_spray": 620,
+    "suspicious|credential_burst": 644,
+    "suspicious|suspicious_new_device": 606,
+    "unusual_legitimate|new_device": 236,
+    "unusual_legitimate|night_activity": 262,
+    "unusual_legitimate|repeated_failure": 278,
+    "unusual_legitimate|travel_pattern": 247
+  },
+  "dataset_sha256": "613e92e611bf1eae3551d85e7da84afc4edd09b67b9bb80417d6c5ab44bb6826"
+}

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Authentication Events | Security Operations Center{% endblock %}
+{% block content %}
+  <div class="page-heading">
+    <div><h1>Authentication Event History</h1><p>Privacy-conscious login and failure records</p></div>
+  </div>
+  <article class="soc-card">
+    <div class="card-header"><div><h2>Recent Authentication Events</h2><small>Maximum 250 records</small></div></div>
+    <div class="table-wrap">
+      <table class="soc-table">
+        <thead><tr><th>Time</th><th>Username</th><th>Pseudonymized source</th><th>Result</th><th>Rule</th><th>AI</th><th>Probability</th></tr></thead>
+        <tbody>
+          {% for event in events %}
+            <tr>
+              <td class="mono">{{ event["attempted_at"] }}</td>
+              <td class="mono">{{ event["username"] }}</td>
+              <td class="mono">{{ event["source_ip"] }}</td>
+              <td><span class="status-pill {{ 'status-success' if event['success'] else 'status-danger' }}">{{ "Success" if event["success"] else "Failure" }}</span></td>
+              <td><span class="status-pill {{ 'status-danger' if event['suspicious'] else 'status-neutral' }}">{{ "Suspicious" if event["suspicious"] else "Normal" }}</span></td>
+              <td><span class="status-pill {{ 'status-danger' if event['model_prediction'] == 1 else 'status-neutral' }}">{{ "Suspicious" if event["model_prediction"] == 1 else ("Normal" if event["model_prediction"] == 0 else "Unavailable") }}</span></td>
+              <td class="mono">{{ "%.3f"|format(event["model_probability"]) if event["model_probability"] is not none else "—" }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="7">No authentication events recorded.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+  {% if synthetic_tests %}
+  <article class="soc-card" style="margin-top:12px">
+    <div class="card-header">
+      <div><h2>Synthetic Manual Test Events</h2><small>Separated from genuine authentication records</small></div>
+      <span class="status-pill status-warning">Synthetic Test</span>
+    </div>
+    <div class="table-wrap">
+      <table class="soc-table">
+        <thead><tr><th>Tested</th><th>Administrator</th><th>Scenario</th><th>Prediction</th><th>Probability</th></tr></thead>
+        <tbody>
+          {% for event in synthetic_tests %}
+            <tr>
+              <td class="mono">{{ event["tested_at"] }}</td>
+              <td class="mono">{{ event["administrator_username"] }}</td>
+              <td>{{ event["scenario"]|title }}</td>
+              <td><span class="status-pill {{ 'status-danger' if event['model_prediction'] else 'status-neutral' }}">{{ "Suspicious" if event["model_prediction"] else "Normal" }}</span></td>
+              <td class="mono">{{ "%.4f"|format(event["model_probability"]) }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+  {% endif %}
+{% endblock %}

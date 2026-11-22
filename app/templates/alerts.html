@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Security Alerts | Security Operations Center{% endblock %}
+{% block content %}
+  <div class="page-heading">
+    <div><h1>Security Alerts</h1><p>Suspicious login alert queue and review status</p></div>
+  </div>
+  <article class="soc-card">
+    <div class="card-header"><div><h2>Alert Queue</h2><small>Administrator review records</small></div></div>
+    <div class="table-wrap">
+      <table class="soc-table">
+        <thead><tr><th>Created</th><th>Event</th><th>Severity</th><th>Explanation</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody>
+          {% for alert in alerts %}
+            <tr>
+              <td class="mono">{{ alert["created_at"] }}</td>
+              <td class="mono">EVT-{{ alert["event_id"] }}</td>
+              <td><span class="status-pill {{ 'status-danger' if alert['severity'] == 'high' else ('status-warning' if alert['severity'] == 'medium' else 'status-neutral') }}">{{ alert["severity"]|title }}</span></td>
+              <td>{{ alert["explanation"] }}</td>
+              <td><span class="status-pill {{ 'status-success' if alert['review_status'] == 'reviewed' else 'status-warning' }}">{{ alert["review_status"]|title }}</span></td>
+              <td>
+                {% if alert["review_status"] == "open" %}
+                  <form method="post" action="{{ url_for('review_alert', alert_id=alert['id']) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="table-action" type="submit">Mark reviewed</button>
+                  </form>
+                {% else %}—{% endif %}
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="6">No security alerts.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+{% endblock %}

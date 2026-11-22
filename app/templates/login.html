@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Sign in | Security Operations Center{% endblock %}
+{% block content %}
+  <section class="auth-card">
+    <div class="auth-brand">
+      <span class="brand-shield">S</span>
+      <div><strong>Security Operations Center</strong><small>Intelligent Password Attack Detection</small></div>
+    </div>
+    <h1>Sign in</h1>
+    <p class="subtitle">Access the authorized local security laboratory.</p>
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" maxlength="64" required>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" maxlength="128" required>
+      </div>
+      <button type="submit" class="primary-button">Sign in</button>
+    </form>
+    <div class="auth-links">New lab account? <a href="{{ url_for('register') }}">Create account</a></div>
+  </section>
+{% endblock %}
