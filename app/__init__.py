@@ -91,6 +91,9 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.config["SESSION_COOKIE_SECURE"] = bool(
         app.config.get("SESSION_COOKIE_SECURE", False)
     )
+    app.config["PREFERRED_URL_SCHEME"] = (
+        "https" if app.config["SESSION_COOKIE_SECURE"] else "http"
+    )
 
     trust_proxy_headers = _env_flag("TRUST_PROXY_HEADERS", _env_flag("RENDER", False))
     if trust_proxy_headers and not app.config.get("TESTING"):

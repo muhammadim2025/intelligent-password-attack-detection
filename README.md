@@ -367,7 +367,7 @@ headers. HSTS does not create HTTPS; HTTPS must be configured and verified exter
 
 For Render-specific preparation, exact build/start commands, environment variables, and
 database guidance, see [DEPLOYMENT_RENDER.md](DEPLOYMENT_RENDER.md). The production WSGI
-entry point is `wsgi:app` (`gunicorn --bind 0.0.0.0:$PORT wsgi:app`). A safe helper to
+entry point is `wsgi:app` (recommended Render start command for SQLite: `gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120 wsgi:app`). A safe helper to
 initialize a fresh deployment database without modifying `instance/research.db` is
 `scripts/prepare_production_database.py`.
 

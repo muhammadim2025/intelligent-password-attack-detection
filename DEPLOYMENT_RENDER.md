@@ -85,26 +85,29 @@ pip install --upgrade pip && pip install -r requirements.txt
 ### Start command
 
 ```bash
-gunicorn --bind 0.0.0.0:$PORT wsgi:app
+gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120 wsgi:app
 ```
+
+- `PORT` is provided by Render at runtime; do not hardcode it.
+- `--workers 1` is recommended for SQLite to avoid multi-process write-lock contention. If you later migrate to a managed server database, tune workers/threads for that backend instead.
 
 ### Environment variables
 
-Set these in Render's environment/secret settings (not in the repository):
+Set these in Render's environment/secret settings (not in the repository). `PORT` is injected by Render and should not be set manually.
 
 | Variable | Required | Example / guidance |
 | --- | --- | --- |
 | `SECRET_KEY` | Yes | Long random secret (e.g. 32+ bytes, hex/base64). Never hardcode. |
-| `PRIVACY_HMAC_KEY` | Recommended | Separate long random secret for source pseudonymization. If unset, app falls back to `SECRET_KEY` for HMAC in existing behavior; set a distinct value in production. |
+| `PRIVACY_HMAC_KEY` | Recommended | Separate long random secret for source pseudonymization. If unset, the app falls back to `SECRET_KEY` for existing HMAC behavior; set a distinct value in production. |
 | `FLASK_DEBUG` | Yes | `0` |
 | `DATABASE_PATH` | Yes (for persistence) | `/var/data/app.db` on a Render Persistent Disk (fresh DB only). |
 | `SESSION_COOKIE_SECURE` | Recommended | `true` |
-| `TRUST_PROXY_HEADERS` | Recommended | `true` (Render sets `RENDER`; app also honors `RENDER` for ProxyFix) |
+| `TRUST_PROXY_HEADERS` | Recommended | `true` (`RENDER` is also honored by the app for proxy header trust). |
 | `MANUAL_DETECTION_LAB` | Yes | `false` |
 | `SOC_DEMO_MODE` | Yes | `false` |
 | `AUTH_EVENT_RETENTION_ENABLED` | Recommended | `true` (or as policy requires) |
 | `AUTH_EVENT_RETENTION_DAYS` | Recommended | `90` (or as policy requires) |
-| `WEB_CONCURRENCY` | Optional | Gunicorn worker count; tune for instance size (SQLite favors low concurrency). |
+| `WEB_CONCURRENCY` | Optional | Not required when using the recommended fixed `--workers 1` start command for SQLite. |
 
 Do not set `FLASK_DEBUG=1`, do not enable demo/manual-lab modes, and do not provide paths to local development databases.
 
@@ -116,16 +119,25 @@ Do not set `FLASK_DEBUG=1`, do not enable demo/manual-lab modes, and do not prov
 2. **Create a Render Web Service** from the repository/branch (Python runtime).
 3. **Configure commands:**
    - Build: `pip install --upgrade pip && pip install -r requirements.txt`
-   - Start: `gunicorn --bind 0.0.0.0:$PORT wsgi:app`
+   - Start: `gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120 wsgi:app`
 4. **Add a Persistent Disk** (recommended for SQLite durability), mount e.g. `/var/data`.
 5. **Set environment variables** as listed above; generate strong random values for secrets.
-6. **Provision the database path:** ensure `DATABASE_PATH` points to a fresh file on the persistent disk (not `instance/research.db`).
+6. **Provision the database path (fresh/empty DB):**
+   - Set `DATABASE_PATH` to a fresh file on the persistent disk (for example `/var/data/app.db`), **not** `instance/research.db`.
+   - The app creates parent directories and initializes required tables on startup/request (`app.models.db.initialize`), so the production database starts empty with a safe schema initialization process.
+   - Optional pre-initialization (safe, no effect on local databases): run in the Render environment with the same `DATABASE_PATH`:
+     ```bash
+     python scripts/prepare_production_database.py --database-path /var/data/app.db
+     ```
+   - Do not create a default administrator password. If an admin account is required, provision it explicitly in a controlled secure shell with required env vars set (including `ADMIN_PROVISIONING_CODE`, `SECRET_KEY`, and the production `DATABASE_PATH`):
+     ```bash
+     python scripts/provision_administrator.py --username <admin-username> --confirm
+     ```
 7. **Deploy and verify:**
    - Check `GET /health` returns `200 {"status":"ok"}`.
    - Confirm HTTPS is enforced by Render and secure cookies/HSTS behavior are correct.
-   - Create/provision an administrator using the controlled CLI flow in a secure environment if needed (`scripts/provision_administrator.py`), never via public registration.
-   - Verify admin login, dashboard access, non-admin restrictions, and that `/admin/manual-detection*` endpoints are not accessible.
-8. **Post-deploy checks:** review logs, rate limiting, retention settings, and backup/restore for the persistent disk.
+   - Verify admin login/provisioning flow, dashboard access, non-admin restrictions, and that `/admin/manual-detection*` endpoints are not accessible in production.
+8. **Post-deploy checks:** review logs, rate limiting, retention settings, and backup/restore for the persistent disk. Keep the database empty of real user data unless and until a separate, approved data-handling plan exists.
 
 ## 7. Security notes
 
