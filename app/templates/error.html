@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}Security Operations Center{% endblock %}
+{% block title %}SafeSignIn{% endblock %}
 {% block content %}
   <section class="auth-card">
-    <div class="auth-brand"><span class="brand-shield">S</span><div><strong>Security Operations Center</strong><small>Request status</small></div></div>
+    <div class="auth-brand"><span class="brand-shield">S</span><div><strong>SafeSignIn</strong><small>Request status</small></div></div>
     <h1>Request not completed</h1>
     <p class="subtitle">{{ message }}</p>
     <a class="primary-button" style="display:grid;place-items:center;text-decoration:none" href="{{ url_for('login') }}">Return to sign in</a>

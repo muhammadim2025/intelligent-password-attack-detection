@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from app.auth.hashing import hash_password, verify_password
+from app.config import unusual_login_min_history
 from app.detection.features import LABEL_COLUMN, feature_values, synthetic_suspicious_label
 
 
@@ -248,6 +249,55 @@ def record_authentication_event(
         1 if success == 0 else 0
     )
 
+    distinct_ip_rows = connection.execute(
+        """
+        SELECT DISTINCT source_ip
+        FROM login_events
+        WHERE username = ?
+          AND attempted_at >= ?
+          AND source_ip IS NOT NULL
+          AND source_ip <> ''
+        """,
+        (username, window_start),
+    ).fetchall()
+    distinct_ips = {
+        str(row["source_ip"]).strip()
+        for row in distinct_ip_rows
+        if str(row["source_ip"]).strip()
+    }
+    current_source = str(source_ip).strip() if source_ip is not None else ""
+    if current_source:
+        distinct_ips.add(current_source)
+    unique_ips_5min = len(distinct_ips) if distinct_ips else 1
+
+    history_rows = connection.execute(
+        """
+        SELECT attempted_at
+        FROM login_events
+        WHERE username = ?
+          AND success = 1
+          AND attempted_at IS NOT NULL
+        """,
+        (username,),
+    ).fetchall()
+    min_history = unusual_login_min_history()
+    usual_hours: set[int] = set()
+    valid_history = 0
+    for row in history_rows:
+        raw_attempted = row["attempted_at"]
+        try:
+            parsed_attempted = datetime.fromisoformat(str(raw_attempted))
+        except (TypeError, ValueError):
+            continue
+        if parsed_attempted.tzinfo is None:
+            parsed_attempted = parsed_attempted.replace(tzinfo=timezone.utc)
+        usual_hours.add(parsed_attempted.astimezone(timezone.utc).hour)
+        valid_history += 1
+    if valid_history < min_history:
+        unusual_login_time = 0
+    else:
+        unusual_login_time = 0 if hour_of_day in usual_hours else 1
+
     prior_success = connection.execute(
         """
         SELECT attempted_at
@@ -307,6 +357,8 @@ def record_authentication_event(
         ),
         "time_since_last_login": seconds_since_previous,
         "recent_account_failure_count": recent_account_failures,
+        "unique_ips_5min": unique_ips_5min,
+        "unusual_login_time": unusual_login_time,
     }
     connection.execute(
         """
@@ -318,7 +370,9 @@ def record_authentication_event(
             login_hour = ?,
             source_failure_rate = ?,
             time_since_last_login = ?,
-            recent_account_failure_count = ?
+            recent_account_failure_count = ?,
+            unique_ips_5min = ?,
+            unusual_login_time = ?
         WHERE id = ?
         """,
         (
@@ -330,6 +384,8 @@ def record_authentication_event(
             research_features["source_failure_rate"],
             research_features["time_since_last_login"],
             research_features["recent_account_failure_count"],
+            research_features["unique_ips_5min"],
+            research_features["unusual_login_time"],
             event_id,
         ),
     )

@@ -20,6 +20,17 @@ def database_path() -> Path:
     return path
 
 
+def database_url() -> str | None:
+    """Return the configured PostgreSQL URL, if any."""
+    value = os.getenv("DATABASE_URL", "").strip()
+    return value or None
+
+
+def database_target() -> str | Path:
+    """Return the default database target for the current environment."""
+    return database_url() or database_path()
+
+
 def auth_event_retention_days() -> int:
     """Return the configured retention period, rejecting unsafe values."""
     raw = os.getenv("AUTH_EVENT_RETENTION_DAYS", "90")
@@ -67,3 +78,13 @@ def manual_detection_lab_enabled() -> bool:
         "on",
     }
     return enabled and local_debug
+
+
+def unusual_login_min_history() -> int:
+    """Return the minimum successful-login history required to learn usual hours."""
+    raw = os.getenv("UNUSUAL_LOGIN_MIN_HISTORY", "5")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return 5
+    return max(1, value)

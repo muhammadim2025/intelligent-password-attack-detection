@@ -15,6 +15,8 @@ from app.config import (
     auth_event_retention_days,
     auth_event_retention_enabled,
     database_path,
+    database_target,
+    database_url,
     manual_detection_lab_enabled,
     soc_demo_database_path,
     soc_demo_mode_enabled,
@@ -54,12 +56,16 @@ def create_app(test_config: dict | None = None) -> Flask:
     debug_enabled = _debug_enabled()
     session_cookie_secure = _session_cookie_secure(debug_enabled)
     manual_detection_lab = manual_detection_lab_enabled() if debug_enabled else False
+    default_db_path = database_path()
+    default_db_url = database_url()
     app.config.update(
         DEBUG=False,
         TESTING=False,
         PROPAGATE_EXCEPTIONS=False,
         SECRET_KEY=os.getenv("SECRET_KEY"),
-        DATABASE_PATH=database_path(),
+        DATABASE_URL=default_db_url,
+        DATABASE_PATH=default_db_path,
+        DB_TARGET=default_db_url or default_db_path,
         SOC_DEMO_MODE=soc_demo_mode_enabled(),
         MANUAL_DETECTION_LAB=manual_detection_lab,
         PRIVACY_HMAC_KEY=os.getenv("PRIVACY_HMAC_KEY"),
@@ -78,8 +84,18 @@ def create_app(test_config: dict | None = None) -> Flask:
             app.config["MANUAL_DETECTION_LAB"] = bool(
                 app.config.get("MANUAL_DETECTION_LAB", False)
             )
+
+    # Explicit SQLite path configuration (e.g. tests or SOC demo) takes precedence
+    # over DATABASE_URL so isolated local databases continue to work.
     if app.config["SOC_DEMO_MODE"] and not app.config.get("TESTING"):
         app.config["DATABASE_PATH"] = soc_demo_database_path()
+        app.config["DB_TARGET"] = app.config["DATABASE_PATH"]
+    elif test_config and "DATABASE_PATH" in test_config:
+        app.config["DB_TARGET"] = app.config["DATABASE_PATH"]
+    elif test_config and "DB_TARGET" in test_config:
+        pass
+    elif default_db_url and not (test_config and "DATABASE_PATH" in test_config):
+        app.config["DB_TARGET"] = default_db_url
 
     secret_key = app.config.get("SECRET_KEY")
     if not secret_key:
@@ -125,7 +141,7 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     @login_manager.user_loader
     def load_user(user_id: str):
-        connection = connect(app.config["DATABASE_PATH"])
+        connection = connect(app.config.get("DB_TARGET"))
         try:
             row = get_user_by_id(connection, int(user_id))
         finally:
@@ -141,7 +157,7 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     @app.before_request
     def initialize_database() -> None:
-        connection = connect(app.config["DATABASE_PATH"])
+        connection = connect(app.config.get("DB_TARGET"))
         try:
             initialize(connection)
             if app.config["AUTH_EVENT_RETENTION_ENABLED"]:
@@ -182,7 +198,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             from app.services.alerts import create_alert
             from app.services.login_events import record_authentication_event
 
-            connection = connect(app.config["DATABASE_PATH"])
+            connection = connect(app.config.get("DB_TARGET"))
             try:
                 username = request.form.get("username", "").strip()
                 from app.privacy import pseudonymize_source

@@ -66,14 +66,18 @@ def predict(features: dict[str, int | float], path: Path | None = None) -> tuple
 
 def feature_explanation(features: dict[str, int | float]) -> str:
     parts = []
-    if features["failed_attempts_5min"] >= 5:
+    if float(features.get("failed_attempts_5min", 0)) >= 5:
         parts.append("5-minute failures are elevated")
-    if features["unique_accounts_5min"] >= 4:
+    if float(features.get("unique_accounts_5min", 0)) >= 4:
         parts.append("multiple accounts were targeted")
-    if features["source_failure_rate"] >= 0.75:
+    if int(features.get("unique_ips_5min", 1)) >= 3:
+        parts.append("same account used from multiple source IPs recently")
+    if float(features.get("source_failure_rate", 0)) >= 0.75:
         parts.append("the source failure rate is elevated")
-    if features["new_device"]:
+    if features.get("new_device"):
         parts.append("the login used a new-device signal")
+    if int(features.get("unusual_login_time", 0)) == 1:
+        parts.append("login time is outside the learned usual pattern")
     if not parts:
         return "No strong suspicious behavioral feature was detected."
     return "; ".join(parts) + "."

@@ -36,6 +36,8 @@ FEATURE_COLUMNS = [
     "source_failure_rate",
     "time_since_last_login",
     "recent_account_failure_count",
+    "unique_ips_5min",
+    "unusual_login_time",
 ]
 
 

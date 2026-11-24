@@ -131,6 +131,16 @@ def generate(output: Path, count: int, seed: int) -> dict:
             time_since_last = rng.randint(0, 300)
             account_failures = rng.randint(4, 10)
 
+        if mode < 0.58:
+            unique_ips_5min = 1 if rng.random() < 0.92 else 2
+            unusual_login_time = 1 if rng.random() < 0.05 else 0
+        elif mode < 0.82:
+            unique_ips_5min = 1 if rng.random() < 0.55 else rng.randint(2, 3)
+            unusual_login_time = 1 if rng.random() < 0.35 else 0
+        else:
+            unique_ips_5min = rng.randint(2, 6)
+            unusual_login_time = 1 if rng.random() < 0.70 else 0
+
         features = {
             "failed_attempts_5min": failed_attempts,
             "login_attempts_5min": login_attempts,
@@ -140,6 +150,8 @@ def generate(output: Path, count: int, seed: int) -> dict:
             "source_failure_rate": source_failure_rate,
             "time_since_last_login": time_since_last,
             "recent_account_failure_count": account_failures,
+            "unique_ips_5min": unique_ips_5min,
+            "unusual_login_time": unusual_login_time,
         }
 
         try:
@@ -158,10 +170,11 @@ def generate(output: Path, count: int, seed: int) -> dict:
                 failed_attempts_5min, login_attempts_5min,
                 unique_accounts_5min, new_device, login_hour,
                 source_failure_rate, time_since_last_login,
-                recent_account_failure_count
+                recent_account_failure_count, unique_ips_5min,
+                unusual_login_time
             ) VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
             (
@@ -186,6 +199,8 @@ def generate(output: Path, count: int, seed: int) -> dict:
                 source_failure_rate,
                 time_since_last,
                 account_failures,
+                unique_ips_5min,
+                unusual_login_time,
             ),
         )
         event_id = int(cursor.lastrowid)

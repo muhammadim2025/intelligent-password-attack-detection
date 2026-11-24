@@ -1,14 +1,14 @@
-{% extends "base.html" %}
-{% block title %}Authentication Events | Security Operations Center{% endblock %}
+﻿{% extends "base.html" %}
+{% block title %}Authentication Events | Decision Tree-Based AI System for Suspicious Login Classification{% endblock %}
 {% block content %}
   <div class="page-heading">
-    <div><h1>Authentication Event History</h1><p>Privacy-conscious login and failure records</p></div>
+    <div><h1>Authentication Event History</h1><p>Privacy-conscious login records with Decision Tree inputs, predictions, and behavioural detection parameters</p></div>
   </div>
   <article class="soc-card">
-    <div class="card-header"><div><h2>Recent Authentication Events</h2><small>Maximum 250 records</small></div></div>
+    <div class="card-header"><div><h2>Recent Authentication Events</h2><small>Maximum 250 records (live database records)</small></div></div>
     <div class="table-wrap">
       <table class="soc-table">
-        <thead><tr><th>Time</th><th>Username</th><th>Pseudonymized source</th><th>Result</th><th>Rule</th><th>AI</th><th>Probability</th></tr></thead>
+        <thead><tr><th>Time</th><th>Username</th><th>Pseudonymized source</th><th>Result</th><th>Rule</th><th>AI</th><th>Probability</th><th>Unique IPs (5m)</th><th>Unusual Time</th></tr></thead>
         <tbody>
           {% for event in events %}
             <tr>
@@ -19,9 +19,11 @@
               <td><span class="status-pill {{ 'status-danger' if event['suspicious'] else 'status-neutral' }}">{{ "Suspicious" if event["suspicious"] else "Normal" }}</span></td>
               <td><span class="status-pill {{ 'status-danger' if event['model_prediction'] == 1 else 'status-neutral' }}">{{ "Suspicious" if event["model_prediction"] == 1 else ("Normal" if event["model_prediction"] == 0 else "Unavailable") }}</span></td>
               <td class="mono">{{ "%.3f"|format(event["model_probability"]) if event["model_probability"] is not none else "—" }}</td>
+              <td class="mono">{{ event["unique_ips_5min"] if event["unique_ips_5min"] is not none else "—" }}</td>
+              <td class="mono">{{ event["unusual_login_time"] if event["unusual_login_time"] is not none else "—" }}</td>
             </tr>
           {% else %}
-            <tr><td colspan="7">No authentication events recorded.</td></tr>
+            <tr><td colspan="9">No authentication events recorded.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -35,7 +37,7 @@
     </div>
     <div class="table-wrap">
       <table class="soc-table">
-        <thead><tr><th>Tested</th><th>Administrator</th><th>Scenario</th><th>Prediction</th><th>Probability</th></tr></thead>
+        <thead><tr><th>Tested</th><th>Administrator</th><th>Scenario</th><th>Prediction</th><th>Probability</th><th>Unique IPs (5m)</th><th>Unusual Time</th></tr></thead>
         <tbody>
           {% for event in synthetic_tests %}
             <tr>
@@ -44,6 +46,8 @@
               <td>{{ event["scenario"]|title }}</td>
               <td><span class="status-pill {{ 'status-danger' if event['model_prediction'] else 'status-neutral' }}">{{ "Suspicious" if event["model_prediction"] else "Normal" }}</span></td>
               <td class="mono">{{ "%.4f"|format(event["model_probability"]) }}</td>
+              <td class="mono">{{ event["unique_ips_5min"] if event["unique_ips_5min"] is not none else "—" }}</td>
+              <td class="mono">{{ event["unusual_login_time"] if event["unusual_login_time"] is not none else "—" }}</td>
             </tr>
           {% endfor %}
         </tbody>

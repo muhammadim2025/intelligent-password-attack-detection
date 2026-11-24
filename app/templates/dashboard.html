@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Security Operations Center{% endblock %}
+{% block title %}SafeSignIn{% endblock %}
 {% block content %}
   <div class="page-heading">
     <div>
-      <h1>Security Operations Center</h1>
+      <h1>SafeSignIn</h1>
       <p>
         {% if synthetic_dashboard %}
           Synthetic manual detection tests (stored records only)
@@ -135,6 +135,10 @@
         </div>
       </div>
       <div class="chart-wrap compact"><canvas id="distributionChart"></canvas></div>
+      <div class="analytics-lines">
+        <div><span>Normal</span><b>{{ counts["normal"] if synthetic_dashboard else (counts["events"] - counts["suspicious"]) }}</b></div>
+        <div><span>Suspicious</span><b>{{ counts["suspicious"] }}</b></div>
+      </div>
     </article>
 
     <article class="soc-card span-8">
@@ -186,6 +190,10 @@
         <div><h2>Alert Review Status</h2><small>{{ "Synthetic test alerts" if synthetic_dashboard else "Reviewed versus open" }}</small></div>
       </div>
       <div class="chart-wrap compact"><canvas id="alertChart"></canvas></div>
+      <div class="analytics-lines">
+        <div><span>Open</span><b>{{ alert_counts["open"] or 0 }}</b></div>
+        <div><span>Reviewed</span><b>{{ alert_counts["reviewed"] or 0 }}</b></div>
+      </div>
     </article>
 
     <article class="soc-card span-8">
@@ -341,17 +349,23 @@
           ]},
           options: { responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false }, plugins: { legend: { position: "bottom" }, tooltip }, scales: { x: { grid, title: { display: true, text: synthetic ? "Time bucket (from tested_at)" : "Day" } }, y: integerY } }
         });
+        const normalCount = toNumber(data.normal);
+        const suspiciousCount = toNumber(data.suspicious);
+        const openCount = toNumber(data.open);
+        const reviewedCount = toNumber(data.reviewed);
+        const doughnutLegend = { position: "bottom", labels: { color: "#cbd5e1", usePointStyle: true, padding: 14 } };
+        const doughnutTooltip = { ...tooltip, callbacks: { label: (ctx) => `${ctx.label}: ${Math.round(ctx.parsed ?? 0)}` } };
         destroyChart("distributionChart");
         charts.distributionChart = new Chart(byId("distributionChart"), {
           type: "doughnut",
-          data: { labels: ["Normal", "Suspicious"], datasets: [{ data: [toNumber(data.normal), toNumber(data.suspicious)], backgroundColor: ["#3b82f6", "#ef4444"], borderWidth: 0, cutout: "68%" }] },
-          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" }, tooltip } }
+          data: { labels: [`Normal (${normalCount})`, `Suspicious (${suspiciousCount})`], datasets: [{ data: [normalCount, suspiciousCount], backgroundColor: ["#3b82f6", "#ef4444"], borderWidth: 0, cutout: "68%" }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: doughnutLegend, tooltip: doughnutTooltip } }
         });
         destroyChart("alertChart");
         charts.alertChart = new Chart(byId("alertChart"), {
           type: "doughnut",
-          data: { labels: ["Open", "Reviewed"], datasets: [{ data: [toNumber(data.open), toNumber(data.reviewed)], backgroundColor: ["#f97316", "#22c55e"], borderWidth: 0, cutout: "68%" }] },
-          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" }, tooltip } }
+          data: { labels: [`Open (${openCount})`, `Reviewed (${reviewedCount})`], datasets: [{ data: [openCount, reviewedCount], backgroundColor: ["#f97316", "#22c55e"], borderWidth: 0, cutout: "68%" }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: doughnutLegend, tooltip: doughnutTooltip } }
         });
         destroyChart("timelineChart");
         charts.timelineChart = new Chart(byId("timelineChart"), {

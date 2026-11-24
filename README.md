@@ -1,373 +1,181 @@
-# Intelligent Password Attack Detection Using Decision Tree and Secure Hashing
+﻿# Decision Tree-Based AI System for Suspicious Login Classification
 
-Seventh-semester cybersecurity research prototype. The system will watch login behavior on **local test accounts**, label suspicious attempts with a **Decision Tree**, and store passwords with **Argon2id**. Data for training and demos will be **synthetic** or created inside this project.
+This project is a university cybersecurity research prototype that uses **Decision Tree classification**, **behavioural analysis**, and **Argon2id secure hashing** to analyze login activity on **local test accounts** and classify attempts as **suspicious** or **non-suspicious**. Training, evaluation, and dashboard demonstration data are **synthetic** or created inside the project unless explicitly labeled as live application data.
 
-Phase 3A is in place: Flask registration and login, Flask-Login sessions, CSRF protection,
-live authentication-event logging, login rate limiting, and a protected administrator
-dashboard. The Decision Tree remains a later implementation phase.
+> **Research boundary:** Use this project in a controlled local/lab environment only. Do not load real user credentials, leaked password lists, or production authentication logs. Do not point it at a live identity system or deploy demo/manual-lab modes publicly.
 
-## Research boundary
+## Official project title
 
-Use this project in a controlled lab:
+**Decision Tree-Based AI System for Suspicious Login Classification**
 
-- Create test accounts yourself, or generate synthetic login records.
-- Keep the database on this machine (`instance/`).
-- Train and evaluate the Decision Tree on those synthetic records.
+## Core capabilities
 
-Do not load real user credentials, leaked password lists, or production authentication logs. Do not point the app at a live identity system.
+- Flask authentication workflow for local test accounts (registration, login, logout, role-based access).
+- Argon2id password hashing; passwords/plaintext secrets are not stored in login-event records.
+- CSRF protection, login rate limiting, secure session handling, and administrator-only protected views.
+- Live authentication-event logging with pseudonymized source identifiers (keyed HMAC), not raw IP addresses.
+- Decision Tree-based AI classification of login attempts using 10 behavioural features.
+- Security alert creation/review workflow for AI-predicted suspicious events.
+- Admin/SOC **Security Analytics Dashboard** with database-backed KPIs, charts, behavioural analytics, and model analytics.
+- Lightweight live dashboard updates (JSON polling every ~7 seconds) with animated KPI/chart updates, last successful update time, and connection/error status.
+- Manual Detection Test Lab (optional, local debug-only) for synthetic feature-vector prediction/save in isolated synthetic tables.
+- Synthetic research dataset generation, reproducible training/evaluation, and separate SOC demo database support.
+- SQLite for local development and PostgreSQL-compatible schema/query paths where supported by the application.
 
-## Stack
+## Final 10-feature Decision Tree input order
 
-| Concern | Choice |
-| --- | --- |
-| Web application | Python, Flask |
-| Detection model | scikit-learn Decision Tree |
-| Password storage | Argon2id via `argon2-cffi` |
-| Database | SQLite (Python standard library) |
-| Interface | HTML, CSS, JavaScript |
+The same feature order is used consistently across live extraction, database storage, synthetic dataset generation, training, prediction, and dashboard/manual-lab display:
 
-## Project layout
+1. `failed_attempts_5min` — failed login attempts in the previous 5 minutes for the relevant source context.
+2. `login_attempts_5min` — total login attempts in the previous 5 minutes for the relevant source context.
+3. `unique_accounts_5min` — distinct usernames targeted from the same source in the previous 5 minutes.
+4. `new_device` — whether the username/source combination has no prior successful login history (`1` = new/unseen device/source context).
+5. `login_hour` — UTC hour of the login attempt (0–23).
+6. `source_failure_rate` — failed attempts divided by total attempts in the recent window.
+7. `time_since_last_login` — seconds since the relevant previous login context (safe fallback when unavailable).
+8. `recent_account_failure_count` — recent failed attempts for the same username/account in the 5-minute window.
+9. `unique_ips_5min` — number of distinct **pseudonymized** source IP identifiers associated with the same username within the previous 5 minutes (current source included when available; missing/unavailable IP handled safely).
+10. `unusual_login_time` — binary behavioural feature indicating whether the current UTC login hour is outside the user’s learned usual successful-login hour pattern. Requires a configurable minimum history (`UNUSUAL_LOGIN_MIN_HISTORY`, default `5` successful logins). **Insufficient history/new users return a safe/default state (`0`) and are not automatically classified as suspicious.** Time handling is normalized to UTC.
 
-```text
-intelligent-password-attack-detection/
-├── .env.example
-├── .gitignore
-├── README.md
-├── requirements.txt
-├── app/
-│   ├── __init__.py
-│   ├── config.py
-│   ├── auth/
-│   │   ├── __init__.py
-│   │   └── hashing.py
-│   ├── detection/
-│   │   ├── __init__.py
-│   │   ├── features.py
-│   │   └── tree.py
-│   ├── models/
-│   │   ├── __init__.py
-│   │   └── db.py
-│   ├── routes/
-│   │   ├── __init__.py
-│   │   └── pages.py
-│   ├── services/
-│   │   ├── __init__.py
-│   │   └── login_events.py
-│   ├── static/
-│   │   ├── css/main.css
-│   │   └── js/main.js
-│   └── templates/
-├── data/synthetic/
-├── instance/
-├── scripts/generate_synthetic.py
-└── tests/test_storage.py
-```
+**Important:** These are Decision Tree model inputs. Model predictions are distinct from any separate heuristic rules/labels and from alert-generation logic.
 
-### Root files
+## Live dashboard and analytics
 
-| File | Role |
-| --- | --- |
-| `README.md` | Project purpose, layout, and setup. |
-| `requirements.txt` | Flask, scikit-learn, argon2-cffi, and python-dotenv. |
-| `.env.example` | Sample environment variable names. Copy to `.env` when the app exists. `.env` is gitignored. |
-| `.gitignore` | Keeps the virtual environment, secrets, the local SQLite file, and trained model files out of git. |
+The admin dashboard is a database-backed Security Analytics Dashboard (no fake/random activity). It includes:
 
-### `app/`
+- **Animated KPI cards:** Total Login Attempts, Successful Login Attempts, Failed Login Attempts, AI-Classified Suspicious Attempts, Non-Suspicious Attempts, Detection Rate, Unique Source IPs, Recent Security Alerts.
+- **Live login activity chart:** successful, failed, and AI-suspicious classifications over time from actual timestamps/records.
+- **Classification analytics:** suspicious vs non-suspicious distribution, prediction confidence distribution, and suspicious activity trend.
+- **Behavioural analytics:** multiple-IP activity, unusual login timing, repeated failed login attempts, and accounts experiencing unusual login activity (computed from stored behavioural features/events).
+- **Decision Tree model analytics:** feature importance, classification/confidence summaries, and available model/training-evaluation metrics (clearly labeled as training/evaluation, not live production performance).
 
-| File | Role |
-| --- | --- |
-| `app/__init__.py` | Flask application factory and security-extension setup. |
-| `app/config.py` | Reads `DATABASE_PATH` from the environment. The default is `instance/research.db`. |
-| `app/auth/__init__.py` | Exports the password helpers. |
-| `app/auth/hashing.py` | Hashes and checks lab passwords with Argon2id (64 MiB, 3 iterations, 4 lanes). |
-| `app/detection/__init__.py` | Package marker for the detection model. |
-| `app/detection/features.py` | Names the login-event features and the synthetic suspicious label rule. |
-| `app/detection/tree.py` | Placeholder. Decision Tree training is the following phase. |
-| `app/models/__init__.py` | Exports the database helpers. |
-| `app/models/db.py` | Opens SQLite and creates the `users` and `login_events` tables. |
-| `app/routes/__init__.py` | Package marker for HTTP routes. |
-| `app/routes/pages.py` | Registration, login, logout, and administrator dashboard routes. |
-| `app/services/__init__.py` | Package marker for workflows that sit between routes and storage. |
-| `app/services/login_events.py` | Creates a test account, checks its hash, and stores login events. |
-| `app/static/css/main.css` | Later this will style the pages. |
-| `app/static/js/main.js` | Later this will hold browser behavior for the pages. |
-| `app/templates/.gitkeep` | Reserved for template resources. |
+**Live update mechanism:** frontend polling every ~7 seconds to `/admin/dashboard/live-data?source=real|synthetic` (admin-only Flask JSON endpoint). KPI values and charts update dynamically without full-page reload; last successful update time and connection/error status are displayed. Polling payloads are lightweight (aggregates/charts/analytics/metadata; tables are rendered on page load).
 
-### Data, scripts, tests, and the database folder
+**Data separation:** real authentication statistics (`login_events`, `security_alerts`) and synthetic/manual/demo statistics (`synthetic_test_events`, `synthetic_test_alerts` or demo DB) are queried separately and clearly labeled; they are never mixed.
 
-| Path | Role |
-| --- | --- |
-| `data/synthetic/README.md` | Describes the generated event file. `login_events.csv` is created by the script and is gitignored. |
-| `scripts/generate_synthetic.py` | Builds lab accounts and synthetic login events. |
-| `tests/test_storage.py` | Checks hashing, the tables, and label consistency. |
-| `instance/.gitkeep` | Holds the folder for the local database. The database and `test_accounts.csv` are gitignored. |
+## Project layout (key paths)
 
-Page templates, CSS, and JavaScript are still placeholders.
+- `app/` — Flask app factory, config, routes, models, services, detection, templates, static assets
+- `app/detection/features.py` — canonical research feature schema/order and label helpers
+- `app/detection/predictor.py` — trusted model loading, schema validation, prediction, explanation
+- `app/detection/tree.py` — Decision Tree construction helpers
+- `app/services/login_events.py` — live authentication event recording and behavioural feature extraction
+- `app/routes/pages.py` — auth routes, admin dashboard/live API, manual detection, events/alerts/research views
+- `app/models/db.py` — SQLite/PostgreSQL schema, compatibility layer, migrations/initialization
+- `scripts/generate_research_dataset.py` — reproducible v1 synthetic dataset (10 features)
+- `scripts/train_decision_tree.py` — v1 model training/evaluation and artifact generation
+- `scripts/generate_soc_demo.py` — isolated synthetic SOC demo database generator
+- `scripts/generate_synthetic.py` — legacy synthetic event generation utility
+- `data/synthetic/` — generated synthetic datasets (gitignored/generated outputs as applicable)
+- `data/research/` — evaluation metrics and visualizations (generated)
+- `instance/` — local DB/model artifacts (gitignored/local)
+- `model_artifacts/` — deployment/runtime model artifact location (preferred by predictor when present)
+- `tests/` — automated tests (pytest/unittest-compatible)
 
 ## Environment setup (Windows PowerShell)
 
-Python and Git were not available on the machine when this skeleton was created. Install them before the next phase.
-
-1. Install **Python 3.11 or newer** from [python.org/downloads](https://www.python.org/downloads/). During setup, enable **Add python.exe to PATH**. Prefer the python.org installer. The Microsoft Store alias currently answers `python` on this PC and does not provide a real interpreter.
-2. Close and reopen PowerShell, then check the interpreter:
+1. Install **Python 3.11+** and (optionally) Git.
+2. Create/activate a virtual environment:
 
 ```powershell
-python --version
-```
-
-3. Install **Git** from [git-scm.com/download/win](https://git-scm.com/download/win) if you want version history. Then, from this folder:
-
-```powershell
-git init
-```
-
-4. Create and activate a virtual environment in the project folder:
-
-```powershell
-cd "C:\Users\Muhammad Imran\intelligent-password-attack-detection"
+cd "C:\Users\<you>\intelligent-password-attack-detection"
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
-If PowerShell blocks the activation script, allow local scripts for your user account and activate again:
-
-```powershell
-Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-.\.venv\Scripts\Activate.ps1
-```
-
-5. Install the Phase 1 dependencies:
+3. Install dependencies:
 
 ```powershell
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-6. Confirm the packages import:
+4. Configure environment variables (copy `.env.example` to `.env` as needed). Set a strong `SECRET_KEY` and `PRIVACY_HMAC_KEY` for non-trivial use.
+
+## Run locally
 
 ```powershell
-python -c "import flask, sklearn, argon2, dotenv; print('environment ok')"
+$env:FLASK_DEBUG="1"
+$env:SECRET_KEY="replace-with-a-local-random-secret"
+$env:PRIVACY_HMAC_KEY="replace-with-a-local-random-privacy-key"
+python -m flask --app app run --host 127.0.0.1
 ```
 
-Leave the virtual environment with `deactivate`.
-
-## Generate the lab dataset
-
-From the project folder, with the virtual environment active:
+Initialize a fresh local/deployment database when needed:
 
 ```powershell
-python scripts/generate_synthetic.py
-python -m unittest tests.test_storage -v
+python scripts/prepare_production_database.py
 ```
 
-The generator replaces `instance/research.db` when it runs again. It writes:
-
-| Output | Contents |
-| --- | --- |
-| `instance/research.db` | `users.password_hash` (Argon2id) and `login_events` rows. |
-| `instance/test_accounts.csv` | Usernames and the random lab passwords. Git ignores this file. |
-| `data/synthetic/login_events.csv` | Features and the suspicious label. No passwords. |
-
-Default size: 12 accounts and 360 events, seed 42. Addresses use the documentation ranges `198.51.100.0/24` and `203.0.113.0/24`.
-
-Optional arguments: `--users`, `--events`, and `--seed`.
-
-A synthetic row is labeled suspicious when any of these is true:
-
-- 5 or more failed attempts in the recorded 15-minute window
-- 4 or more distinct usernames from the same address in that window
-- a failed attempt within 2 seconds of the previous attempt
-- 2 or more failures during hours 00–04
-
-Other generated rows are labeled normal. This rule is the dataset’s ground truth. It is not the Decision Tree.
-
-## Phase 3A status
-
-The Flask authentication prototype is implemented for local, synthetic use:
-
-- registration stores only Argon2id password hashes;
-- login and logout use signed Flask sessions;
-- registration and login forms use CSRF protection;
-- successful and failed login attempts create login-event records;
-- login requests are rate limited;
-- only explicitly marked administrator accounts can open `/admin`;
-- passwords and session tokens are not written to login-event records or exposed by dashboard views.
-
-Do not proceed to production deployment or real credential collection. Decision Tree training
-is implemented only as a synthetic research prototype.
-
-## Research dataset and model
-
-Generate the reproducible 10,000-event dataset:
+## Generate dataset and train the Decision Tree (v1)
 
 ```powershell
-& ".\.venv312\Scripts\python.exe" scripts/generate_research_dataset.py --count 10000 --seed 42
-& ".\.venv312\Scripts\python.exe" scripts/train_decision_tree.py
-& ".\.venv312\Scripts\python.exe" -m pytest -q
+python scripts/generate_research_dataset.py --count 10000 --seed 42
+python scripts/train_decision_tree.py
 ```
 
-Outputs:
+Outputs (synthetic research artifacts):
+- `data/synthetic/authentication_events.csv`
+- `instance/decision_tree.joblib`
+- `data/research/evaluation.json`, `data/research/metrics_comparison.png`, `data/research/decision_tree.png`
 
-| Output | Purpose |
-| --- | --- |
-| `data/synthetic/authentication_events.csv` | Reproducible synthetic feature dataset |
-| `instance/decision_tree.joblib` | Trusted locally generated model artifact |
-| `data/research/evaluation.json` | Measured Decision Tree and rule-baseline metrics |
-| `data/research/metrics_comparison.png` | Metric comparison visualization |
-| `data/research/decision_tree.png` | Decision Tree visualization |
-
-The measured synthetic held-out results and confusion matrices are written by the training
-script. They describe this synthetic dataset only and must not be presented as real-world
-detection accuracy.
-
-## Version 2 scientific experiment
-
-Version 2 is isolated from the live Flask model and all Version 1 artifacts.
-
-```powershell
-& ".\.venv312\Scripts\python.exe" scripts/generate_research_dataset_v2.py --count 10000 --seed 2026
-& ".\.venv312\Scripts\python.exe" scripts/train_decision_tree_v2.py
-& ".\.venv312\Scripts\python.exe" scripts/run_v2_experiment.py --count 10000 --seeds 2026 2027 2028 2029 2030
-& ".\.venv312\Scripts\python.exe" scripts/audit_research_v2.py
-& ".\.venv312\Scripts\python.exe" -m pytest -q
-```
-
-Version 2 outputs are under `data/research/v2/` and `instance/v2/`. Labels are scenario-based:
-normal and unusual-legitimate scenarios are normal, while suspicious scenarios are suspicious.
-The eight model features are derived only from timestamped event history available before the
-current prediction. Version 2 includes a chronological 75/25 evaluation and an explicit
-48-source disjoint heldout evaluation.
-
-The rule baseline is an independently specified multi-feature traditional detector. Its
-thresholds are selected using only training folds. Neither baseline thresholds nor Decision
-Tree hyperparameters are adjusted using the final test partition.
-
-Version 2 remains a synthetic research experiment. It must not be loaded into the live Flask
-authentication workflow or presented as real-world detection performance without external
-validation.
+Measured metrics in `data/research/evaluation.json` are **synthetic held-out/training-evaluation results** for this dataset only and must not be presented as real-world detection performance.
 
 ## Safe SOC demonstration database
 
-Generate 160 clearly synthetic dashboard events in a separate database:
-
 ```powershell
-& ".\.venv312\Scripts\python.exe" scripts/generate_soc_demo.py --count 160 --seed 2026
-```
-
-The generator:
-
-- creates `instance/soc_demo.db`;
-- creates synthetic demo users and a `demo-admin` account;
-- uses the existing trusted Decision Tree interface to classify feature vectors;
-- creates alert rows only for model-predicted suspicious events;
-- mixes successes, failures, normal classifications, suspicious classifications, open alerts,
-  reviewed alerts, sources, and timestamps over the previous seven days;
-- never requests or sends data to the Flask login endpoint;
-- never reads from or writes to `instance/research.db`.
-
-Demo mode is disabled by default. Start it only on local loopback:
-
-```powershell
+python scripts/generate_soc_demo.py --count 160 --seed 2026
 $env:SOC_DEMO_MODE="true"
 $env:SECRET_KEY="replace-with-a-local-random-secret"
-& ".\.venv312\Scripts\python.exe" -m flask --app app run --host 127.0.0.1
+python -m flask --app app run --host 127.0.0.1
 ```
 
-Use the one-time synthetic password printed by the generator to sign in as `demo-admin`.
-The password is not written to a file or to the database. Remove the reversible demonstration
-mode by setting `SOC_DEMO_MODE=false` and deleting only `instance/soc_demo.db`. Do not deploy
-demo mode or synthetic credentials publicly.
+- Uses `instance/soc_demo.db` (isolated from `instance/research.db`).
+- Creates synthetic demo users/admin and classified synthetic events/alerts.
+- Never sends login requests and never reads/writes the real research DB.
 
-## Manual Detection Test Lab
+Disable by setting `SOC_DEMO_MODE=false` and deleting `instance/soc_demo.db` if desired.
 
-The administrator-only Manual Detection Test Lab is disabled by default. Enable it only
-for local development:
+## Manual Detection Test Lab (local, admin-only)
 
 ```powershell
 $env:FLASK_DEBUG="1"
 $env:MANUAL_DETECTION_LAB="true"
-$env:SECRET_KEY="replace-with-a-local-random-secret"
-& ".\.venv312\Scripts\python.exe" -m flask --app app run --host 127.0.0.1
+python -m flask --app app run --host 127.0.0.1
 ```
 
-Sign in with an existing account whose `is_admin` value is `1`, then open:
+- Available to explicitly provisioned admin accounts at `/admin/manual-detection`.
+- Runs predictions on fixed synthetic feature vectors using the trusted Decision Tree (no login requests, no password guessing).
+- Saved results go to separate `synthetic_test_events` / `synthetic_test_alerts` tables and are labeled synthetic.
 
-`http://127.0.0.1:5000/admin/manual-detection`
+## Security and privacy
 
-The lab predicts fixed normal and suspicious feature vectors with the existing trusted
-V1 Decision Tree. It sends no login requests and performs no password guessing. A prediction
-can optionally be saved in separate `synthetic_test_events` and `synthetic_test_alerts`
-tables. These rows are labeled synthetic and never modify `login_events` or
-`security_alerts`.
+- **Password hashing:** Argon2id (`app/auth/hashing.py`).
+- **CSRF protection:** enabled for state-changing forms/actions.
+- **Login rate limiting:** enforced on login attempts.
+- **IP pseudonymization:** source IP values are pseudonymized with keyed HMAC before storage/display; raw IPs are not exposed in dashboard views.
+- **Secrets/privacy:** do not log or display plaintext passwords, password hashes, session tokens, or unnecessary personal information.
+- **Admin provisioning:** use controlled CLI provisioning (not public registration) for administrator accounts.
+- **Retention:** authentication-event retention cleanup is configurable; disabled by default to preserve research data.
 
-Set `MANUAL_DETECTION_LAB=false` or unset it to disable the route. Explicit debug/local
-configuration is required, so it is not enabled for normal production startup.
+## Testing and validation
 
-## Security and privacy configuration
-
-Registration accepts passwords that are 12–128 characters and use characters from at least
-three of: lowercase letters, uppercase letters, digits, and symbols. Weak passwords are
-rejected before Argon2id hashing.
-
-Live authentication events pseudonymize source IP values with a keyed HMAC before storage.
-The source IP is not retained as plaintext. Password plaintext, password hashes, and
-Flask session tokens are not written to authentication events or rendered in dashboards.
-
-Authentication-event retention is disabled by default to avoid deleting research data.
-To enable scheduled/policy-based cleanup:
+Run the test suite from the project root:
 
 ```powershell
-$env:AUTH_EVENT_RETENTION_ENABLED="true"
-$env:AUTH_EVENT_RETENTION_DAYS="90"
-& ".\.venv312\Scripts\python.exe" scripts/purge_expired_auth_events.py
+python -m pytest -q
 ```
 
-Retention cleanup is intended to run within application startup/request initialization.
-The purge removes expired events and linked alerts while preserving users and synthetic
-research datasets outside `login_events`.
+Validation should cover (as applicable): behavioural feature extraction (`unique_ips_5min`, `unusual_login_time`, insufficient history, missing IP), dashboard API/data calculations, SQLite/PostgreSQL compatibility paths, and UI behavior. Browser JavaScript console/layout checks may require manual verification in a browser environment.
 
-## Administrator provisioning
+## Limitations and notes
 
-Do not grant administrator status through public registration. Use the separate controlled
-CLI and require explicit confirmation:
+- This is a **research prototype**, not a production-hardened deployment.
+- Model metrics are based on synthetic/research datasets unless explicitly stated otherwise; live dashboard statistics are separate DB-backed operational/test data.
+- `unusual_login_time` uses a UTC hour-of-day learned pattern from prior successful logins with a configurable minimum-history threshold; insufficient history is treated as default-safe (`0`).
+- Version 2 research scripts/artifacts under `scripts/*v2.py`, `data/research/v2/`, and `instance/v2/` are isolated experiments and are not loaded by the live Flask application.
+- If no in-repository academic report document (e.g. `.docx`/`.pdf`) is present, documentation updates in code/markdown cannot replace editing that external report artifact.
 
-```powershell
-$env:ADMIN_PROVISIONING_CODE="replace-with-a-private-local-code"
-& ".\.venv312\Scripts\python.exe" scripts/provision_administrator.py --username admin-name --confirm
-```
+## Deployment
 
-The script prompts for the provisioning code and password without accepting the password
-as a command-line argument. It can create an administrator or explicitly promote an existing
-account. Registration always creates `is_admin = 0`.
-
-## Local development and secure deployment
-
-Local development may run over loopback HTTP with:
-
-- a private `.env` file,
-- `FLASK_DEBUG=1`,
-- test SQLite databases,
-- synthetic accounts and synthetic data,
-- `AUTH_EVENT_RETENTION_ENABLED=false` unless explicit cleanup is desired.
-
-The repository is a university prototype, not a verified production deployment. Before any
-internet exposure:
-
-1. Serve the application only behind HTTPS with a valid certificate and redirect HTTP to HTTPS.
-2. Set a long random `SECRET_KEY` and a separate `PRIVACY_HMAC_KEY` in an external secret manager.
-3. Never commit `.env`, private keys, database files, lab passwords, or model credentials.
-4. Run behind an authenticated reverse proxy/WSGI server with OS-level database permissions.
-5. Set `FLASK_DEBUG=0`, restrict allowed hosts, set secure proxy headers, and verify secure cookies.
-6. Use encrypted storage/backups and define organization-approved retention and incident procedures.
-7. Replace Bootstrap CDN assets with pinned local assets if the interface must work offline.
-8. Audit dependencies, logging, reverse proxy trust, backup recovery, and authorization before deployment.
-
-The application sends HSTS only outside test mode and applies nonce-free browser hardening
-headers. HSTS does not create HTTPS; HTTPS must be configured and verified externally.
-
-For Render-specific preparation, exact build/start commands, environment variables, and
-database guidance, see [DEPLOYMENT_RENDER.md](DEPLOYMENT_RENDER.md). The production WSGI
-entry point is `wsgi:app` (recommended Render start command for SQLite: `gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120 wsgi:app`). A safe helper to
-initialize a fresh deployment database without modifying `instance/research.db` is
-`scripts/prepare_production_database.py`.
-
+See [DEPLOYMENT_RENDER.md](DEPLOYMENT_RENDER.md) for Render-oriented guidance and environment considerations. Production WSGI entry point: `wsgi:app`.

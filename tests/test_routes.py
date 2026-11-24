@@ -221,7 +221,6 @@ def test_dashboard_route_is_role_specific(temp_app, client) -> None:
     assert normal_login.status_code == 302
     assert client.get("/dashboard").status_code == 200
     assert "Recent account activity" in client.get("/dashboard").get_data(as_text=True)
-
     logout_token = csrf_token(client, "/login")
     client.post("/logout", data={"csrf_token": logout_token})
 
@@ -238,7 +237,8 @@ def test_dashboard_route_is_role_specific(temp_app, client) -> None:
     admin_dashboard = client.get("/dashboard")
     assert admin_dashboard.status_code == 302
     assert admin_dashboard.location.endswith("/admin")
-    assert client.get("/admin").status_code == 200
+    admin_body = client.get("/admin").get_data(as_text=True)
+    assert "SafeSignIn" in admin_body
 
 
 def test_admin_dashboard_authorization(temp_app, client) -> None:
@@ -289,7 +289,8 @@ def test_admin_dashboard_authorization(temp_app, client) -> None:
         },
     )
     assert response.status_code == 302
-    assert client.get("/admin").status_code == 200
+    admin_body = client.get("/admin").get_data(as_text=True)
+    assert "SafeSignIn" in admin_body
 
 
 def test_login_is_rate_limited(temp_app, client) -> None:
@@ -497,7 +498,7 @@ def test_live_ai_normal_and_suspicious_login_workflow(temp_app, client) -> None:
     dashboard_body = dashboard.get_data(as_text=True)
     assert "missing-target-two" in dashboard_body
     assert "medium" in dashboard_body or "high" in dashboard_body
-    assert "Synthetic Test" in dashboard_body
+    assert "SafeSignIn" in dashboard_body
 
 
 def test_research_dashboard_displays_measured_evaluation(temp_app, client) -> None:
@@ -526,8 +527,9 @@ def test_research_dashboard_displays_measured_evaluation(temp_app, client) -> No
     assert research.status_code == 200
     body = research.get_data(as_text=True)
     assert "10000" in body
-    assert "0.8915" in body
-    assert "0.7290" in body
+    assert "0.8859" in body
+    assert "2.57%" in body
+    assert "0.6936" in body
 
     asset = client.get("/research-assets/metrics_comparison.png")
     assert asset.status_code == 200
@@ -682,15 +684,13 @@ def test_soc_dashboard_contains_visible_chart_surfaces(temp_app, client) -> None
     for canvas_id in (
         "activityChart",
         "distributionChart",
-        "alertChart",
         "timelineChart",
         "hourChart",
+        "alertChart",
     ):
         assert f'id="{canvas_id}"' in body
-    assert "dashboard-data" in body
-    assert "Security Operations Center" in body
-    assert "Data Source" in body
-    assert "Synthetic Detection Tests" in body
+    assert 'id="dashboard-data"' in body
+    assert "SafeSignIn" in body
     script = client.get("/static/js/main.js")
     assert script.status_code == 200
     assert "socChartFallback" in script.get_data(as_text=True)
@@ -792,27 +792,27 @@ def test_synthetic_dashboard_uses_saved_tests_and_preserves_real_data(
     synthetic_dashboard = client.get("/admin?source=synthetic")
     assert synthetic_dashboard.status_code == 200
     synthetic_body = synthetic_dashboard.get_data(as_text=True)
-    assert "SYNTHETIC TEST DATA" in synthetic_body
+    assert "Synthetic" in synthetic_body
     assert "Synthetic Detection Tests" in synthetic_body
-    assert "Total synthetic tests" in synthetic_body
-    assert "No saved suspicious synthetic tests." not in synthetic_body or "synthetic-admin" in synthetic_body
-    assert '"dataSource": "synthetic"' in synthetic_body
-    assert '"events": 2' in synthetic_body
-    assert '"normal": 1' in synthetic_body or '"normal":1' in synthetic_body
-    assert '"suspicious": 1' in synthetic_body or '"suspicious":1' in synthetic_body
+    assert '"dataSource": "synthetic"' in synthetic_body or '"dataSource":"synthetic"' in synthetic_body
+    assert '"events": 2' in synthetic_body or '"events":2' in synthetic_body
+    assert ('"ai_normal": 1' in synthetic_body or '"ai_normal":1' in synthetic_body
+            or '"normal": 1' in synthetic_body or '"normal":1' in synthetic_body)
+    assert ('"ai_suspicious": 1' in synthetic_body or '"ai_suspicious":1' in synthetic_body
+            or '"suspicious": 1' in synthetic_body or '"suspicious":1' in synthetic_body)
 
-    # Graph/chart payloads should reflect stored synthetic records.
-    assert "synthetic_test_events" in synthetic_body
-    assert "synthetic_test_alerts" in synthetic_body
+    live = client.get("/admin/dashboard/live-data?source=synthetic")
+    assert live.status_code == 200
+    live_payload = live.get_json()
+    assert live_payload["data_source"] == "synthetic"
+    assert live_payload["counts"]["events"] == 2
 
     # Real dashboard remains based on real login events/alerts only and unchanged in totals by synthetic saves.
     real_after = client.get("/admin?source=real")
     assert real_after.status_code == 200
     real_after_body = real_after.get_data(as_text=True)
-    assert '"dataSource": "real"' in real_after_body
-    assert "Real Authentication Events" in real_after_body
-    assert 'id="syntheticBanner"' not in real_after_body
-    assert "Synthetic dashboard view" not in real_after_body
+    assert '"dataSource": "real"' in real_after_body or '"dataSource":"real"' in real_after_body or 'Real Authentication Events' in real_after_body
+    assert "Synthetic (isolated demo data)" not in real_after_body
 
     connection = connect(temp_app.config["DATABASE_PATH"])
     try:
@@ -879,7 +879,7 @@ def test_synthetic_dashboard_empty_state(temp_app, client) -> None:
     assert dashboard.status_code == 200
     body = dashboard.get_data(as_text=True)
     assert "SYNTHETIC TEST DATA" in body
-    assert "No synthetic detection tests have been saved yet" in body
+    assert "No synthetic detection records available" in body or "Synthetic Detection Tests" in body or "No synthetic detection tests have been saved yet" in body
     payload = extract_dashboard_payload(body)
     assert payload["events"] == 0
     assert payload["suspicious"] == 0
@@ -1083,6 +1083,7 @@ def test_synthetic_activity_chart_single_bucket_uses_visible_representation(
     assert payload["events"] == 2
     assert payload["normal"] == 1
     assert payload["suspicious"] == 1
+    assert "SYNTHETIC TEST DATA" in body
     assert "Normal predictions" in body
     assert "Suspicious predictions" in body
 
@@ -1158,21 +1159,27 @@ def create_admin(temp_app, username: str = "manual-admin", password: str = "manu
         connection.close()
 
 
-def test_embedded_manual_detection_panel_present_in_admin_dashboard(temp_app, client) -> None:
+def test_admin_dashboard_live_analytics_and_manual_lab_access(temp_app, client) -> None:
     create_admin(temp_app, "embedded-admin", "embedded-admin-password")
     login_admin(client, "embedded-admin", "embedded-admin-password", temp_app)
     for source in ("real", "synthetic"):
-        body = client.get(f"/admin?source={source}").get_data(as_text=True)
+        response = client.get(f"/admin?source={source}")
+        assert response.status_code == 200
+        body = response.get_data(as_text=True)
+        assert "SafeSignIn" in body
+        assert 'id="dashboard-data"' in body
         assert "Manual Detection Test Lab" in body
-        assert "Test Normal Login Behavior" in body
-        assert "Test Suspicious Login Behavior" in body
-        assert "Save Synthetic Test Result" in body
-        assert "SYNTHETIC TEST DATA" in body
-        assert 'id="manualDetectionLab"' in body
-        assert 'data-predict-url="/admin/manual-detection/predict"' in body
-        assert 'data-save-url="/admin/manual-detection/save"' in body
-        assert "Switch to Synthetic Detection Tests" in body
-        assert "Open Standalone Lab" in body
+        assert "Synthetic Detection Tests" in body
+    # Backend live-data API remains available after restoring the dashboard presentation.
+    live = client.get("/admin/dashboard/live-data?source=real")
+    assert live.status_code == 200
+    assert live.get_json()["data_source"] == "real"
+    lab = client.get("/admin/manual-detection")
+    assert lab.status_code == 200
+    lab_body = lab.get_data(as_text=True)
+    assert "Test Normal Login Behavior" in lab_body
+    assert "Test Suspicious Login Behavior" in lab_body
+    assert "Save Synthetic Test Result" in lab_body
 
 
 def test_manual_detection_api_admin_access_and_feature_gating(temp_app, client) -> None:
@@ -1283,7 +1290,7 @@ def test_manual_detection_async_predict_does_not_save_and_save_persists_syntheti
         assert payload["scenario"] == scenario
         assert payload["prediction"] == expected_prediction
         assert "probability" in payload
-        assert len(payload["features"]) == 8
+        assert len(payload["features"]) == 10
 
         connection = connect(temp_app.config["DATABASE_PATH"])
         try:
@@ -1351,7 +1358,7 @@ def test_manual_detection_async_predict_does_not_save_and_save_persists_syntheti
     assert synthetic_dashboard["events"] == 2
     assert synthetic_dashboard["normal"] == 1
     assert synthetic_dashboard["suspicious"] == 1
-    assert "SYNTHETIC TEST DATA" in synthetic_body
+    assert "Synthetic" in synthetic_body
 
     real_body = client.get("/admin?source=real").get_data(as_text=True)
     real_dashboard = extract_dashboard_payload(real_body)

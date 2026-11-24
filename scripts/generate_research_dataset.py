@@ -21,6 +21,8 @@ FEATURE_COLUMNS = (
     "source_failure_rate",
     "time_since_last_login",
     "recent_account_failure_count",
+    "unique_ips_5min",
+    "unusual_login_time",
 )
 
 
@@ -33,7 +35,9 @@ def synthetic_label(rng: Random, features: dict[str, int | float]) -> int:
     score += max(0.0, float(features["source_failure_rate"]) - 0.35) * 0.55
     score += max(0.0, 180.0 - float(features["time_since_last_login"])) / 180.0 * 0.12
     score += max(0.0, float(features["recent_account_failure_count"]) - 1) * 0.10
-    suspicious = 1 if score >= 0.95 else 0
+    score += max(0.0, (float(features["unique_ips_5min"]) - 1) * 0.20)
+    score += float(features["unusual_login_time"]) * 0.16
+    suspicious = 1 if score >= 1.05 else 0
 
     # Controlled overlapping/noisy labels prevent any single feature from being a perfect shortcut.
     if rng.random() < 0.06:
@@ -67,10 +71,19 @@ def generate(count: int, seed: int, output: Path) -> dict[str, int]:
                 attempts = rng.randint(max(5, failed), failed + 12)
                 unique_accounts = rng.randint(2, 9)
                 new_device = 1 if rng.random() < 0.65 else 0
-                hour = rng.choice((rng.randint(0, 5), rng.randint(21, 23)))
+                # Realistic attack windows: distributed across hours, including off-pattern times.
+                hour = rng.choice(
+                    (rng.randint(0, 5), rng.randint(6, 11), rng.randint(20, 23))
+                )
                 source_failure_rate = round(rng.uniform(0.55, 1.0), 3)
                 time_since_last = rng.randint(0, 240)
                 account_failures = rng.randint(2, 12)
+                # Multiple-IP activity for same username in 5 minutes (behavioural signal).
+                unique_ips_5min = (
+                    rng.randint(2, 6) if rng.random() < 0.75 else 1
+                )
+                # Unusual timing relative to learned user pattern: 1=unusual, 0=usual/safe.
+                unusual_login_time = 1 if rng.random() < 0.70 else 0
             else:
                 failed = rng.choice((0, 0, 0, 1, 2))
                 attempts = rng.randint(max(1, failed), 5)
@@ -80,6 +93,11 @@ def generate(count: int, seed: int, output: Path) -> dict[str, int]:
                 source_failure_rate = round(rng.uniform(0.0, 0.42), 3)
                 time_since_last = rng.randint(120, 7200)
                 account_failures = rng.randint(0, 2)
+                # Normal activity typically comes from one or few known sources.
+                unique_ips_5min = 1 if rng.random() < 0.93 else rng.randint(2, 3)
+                # Insufficient/normal history is represented safely as 0 by extraction;
+                # synthetic data includes mostly usual/safe timing with occasional edge cases.
+                unusual_login_time = 1 if rng.random() < 0.05 else 0
 
             features = {
                 "failed_attempts_5min": failed,
@@ -90,6 +108,8 @@ def generate(count: int, seed: int, output: Path) -> dict[str, int]:
                 "source_failure_rate": source_failure_rate,
                 "time_since_last_login": time_since_last,
                 "recent_account_failure_count": account_failures,
+                "unique_ips_5min": unique_ips_5min,
+                "unusual_login_time": unusual_login_time,
             }
             label = synthetic_label(rng, features)
             if label:

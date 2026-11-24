@@ -1,6 +1,6 @@
-# Render Deployment Preparation
+# Render Deployment Preparation (Neon PostgreSQL / free Render)
 
-This project is a Flask application factory (`app.create_app`) with a Gunicorn-compatible WSGI entry point (`wsgi:app`). This document prepares the project for a secure Render deployment **without** deploying it, uploading it, or modifying the original local database.
+This project is a Flask application factory (`app.create_app`) with a Gunicorn-compatible WSGI entry point (`wsgi:app`). It supports **local SQLite by default** and **PostgreSQL when `DATABASE_URL` is configured**. This document prepares the project for a secure Render deployment using a **fresh Neon PostgreSQL database** **without** deploying it, uploading it, modifying `instance/research.db`, copying local users/records, or changing the trained Decision Tree.
 
 ## 1. WSGI entry point
 
@@ -12,14 +12,29 @@ Do not use `app:app`; the Flask app is created by the application factory.
 
 ## 2. Required model artifacts
 
-The live authentication workflow uses the trusted local Decision Tree artifact:
+The live authentication workflow uses the trusted local Decision Tree artifact and must remain unchanged:
 
 - **Tracked deployment artifact:** `model_artifacts/decision_tree.joblib`
 - **Legacy local path (still supported):** `instance/decision_tree.joblib`
 
 `app.detection.predictor.load_model()` prefers the tracked deployment artifact when present and falls back to the legacy instance path. The tracked artifact is included so a Render build from the repository can load the model without deploying `instance/research.db`.
 
-## 3. Production safety controls
+## 3. Database behavior (SQLite local + PostgreSQL production)
+
+- **Local/default:** if `DATABASE_URL` is not configured, the app uses SQLite at `DATABASE_PATH` (default `instance/research.db`) and existing local SQLite behavior/databases are preserved.
+- **Production (Render/Neon):** if `DATABASE_URL` is configured, the app uses PostgreSQL for application data (users, login events, security alerts, synthetic test tables).
+- **No data copy/migration from local DB:** the production PostgreSQL database must start **fresh and empty**. Do not point production to `instance/research.db`, do not upload/copy local SQLite files, and do not import existing local users or records.
+- **Safe initialization:** the app initializes required schema idempotently on startup/request (`app.models.db.initialize`). You can also pre-initialize explicitly (recommended for first deploy) with the provided script.
+- **No default administrator:** no administrator account or password is created automatically.
+
+### Neon PostgreSQL (recommended for free Render)
+
+1. Create a Neon project/database and obtain its PostgreSQL connection string.
+2. Use a **fresh, empty** database/branch for production (or a fresh schema/database name).
+3. Store the connection string only in Render environment variables as `DATABASE_URL` (never commit it).
+4. Ensure the connection string includes TLS as required by Neon (typically `sslmode=require`).
+
+## 4. Production safety controls (preserved)
 
 The prepared configuration preserves:
 
@@ -28,51 +43,16 @@ The prepared configuration preserves:
 - Rate limiting (`Flask-Limiter`, including login protections)
 - Secure password hashing (Argon2id in `app.auth.hashing`)
 - Login/session protection (`Flask-Login`, HTTP-only session cookie, SameSite=Lax)
+- Login event logging, security alerts, and synthetic-data separation (synthetic/manual-test data stored separately from live events)
 
-Production hardening in this preparation:
+Production hardening:
 
 - `DEBUG`/`TESTING` are disabled by default in the app factory.
 - The Werkzeug development server/debugger is **not** used for Render; run Gunicorn only.
-- Session cookies are secure by default when `FLASK_DEBUG` is not enabled (`SESSION_COOKIE_SECURE` can be set explicitly).
 - `SECRET_KEY` is required from the environment in non-test runs (never hardcoded).
-- `TRUST_PROXY_HEADERS` (or Render's `RENDER` environment) enables `ProxyFix` so forwarded proto/host/client data is handled correctly behind Render's proxy.
+- `TRUST_PROXY_HEADERS` (or Render's `RENDER` environment) enables `ProxyFix` behind Render's proxy.
 - A safe health check endpoint is available at `GET /health` (returns `{"status":"ok"}` with no sensitive data).
-
-### Manual Detection Test Lab (local-only)
-
-The Manual Detection Test Lab and its APIs must not be publicly accessible:
-
-- Routes: `/admin/manual-detection`, `/admin/manual-detection/predict`, `/admin/manual-detection/save`, `/admin/manual-detection/synthetic-data`
-- Enabled only when `MANUAL_DETECTION_LAB=true` **and** `FLASK_DEBUG` is enabled in local development.
-- The app factory disables the lab when debug is not enabled, and routes enforce admin access plus feature gating (404 when disabled).
-
-**For Render/public deployment, set `FLASK_DEBUG=0` and `MANUAL_DETECTION_LAB=false` (or omit it).**
-
-## 4. Database strategy (SQLite) and original data protection
-
-- **Current database:** SQLite (`DATABASE_PATH`, default `instance/research.db`)
-- **Do not deploy:** `instance/research.db`, `instance/soc_demo.db`, `instance/test_accounts.csv`, `.env`, or any local credentials/authentication history.
-- `.gitignore` excludes `.env*` (except `.env.example`), database files, credentials/keys, virtual environments, logs, and local instance contents.
-
-### Safe persistent strategy for Render
-
-Render's container filesystem is ephemeral. A SQLite database stored only in the app directory will be lost on redeploy/restart. For a safe production-like prototype on Render:
-
-1. **Attach a Render Persistent Disk** to the web service (e.g. mount path `/var/data`).
-2. **Use a fresh production database path on that disk**, e.g. `DATABASE_PATH=/var/data/app.db`.
-3. **Never point production to `instance/research.db`** and never copy/upload the original local database.
-4. On first use, the application initializes the required schema in the fresh database (`initialize()` runs during request startup). You can also pre-create it safely with:
-   - `python scripts/prepare_production_database.py --database-path /var/data/app.db`
-   - This script only creates/initializes the target database; it does **not** modify or delete `instance/research.db`.
-
-### Migration considerations (prepare separately)
-
-If future production use requires a managed database (recommended for multi-instance or higher durability), migrate to a server database (e.g. PostgreSQL) in a **separate** change:
-
-- Keep the existing SQLite schema and data flow as the reference.
-- Create a separate migration plan/script that reads from an explicit source and writes to an explicit target.
-- Do not modify or delete the original `instance/research.db`.
-- Validate admin provisioning, authentication events, alerts, CSRF/session behavior, and retention in the target environment before cutover.
+- **Manual Detection Test Lab must remain unavailable in production:** routes `/admin/manual-detection*` are enabled only for explicit local debug testing (`MANUAL_DETECTION_LAB=true` and `FLASK_DEBUG` enabled) and are gated/404 in production. Set `FLASK_DEBUG=0` and `MANUAL_DETECTION_LAB=false` (or omit it).
 
 ## 5. Exact Render configuration
 
@@ -85,11 +65,11 @@ pip install --upgrade pip && pip install -r requirements.txt
 ### Start command
 
 ```bash
-gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120 wsgi:app
+gunicorn --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120 wsgi:app
 ```
 
 - `PORT` is provided by Render at runtime; do not hardcode it.
-- `--workers 1` is recommended for SQLite to avoid multi-process write-lock contention. If you later migrate to a managed server database, tune workers/threads for that backend instead.
+- This start command is suitable for PostgreSQL-backed deployments. If using SQLite on a persistent disk instead, prefer `--workers 1 --threads 2 --timeout 120` to reduce lock contention.
 
 ### Environment variables
 
@@ -99,48 +79,58 @@ Set these in Render's environment/secret settings (not in the repository). `PORT
 | --- | --- | --- |
 | `SECRET_KEY` | Yes | Long random secret (e.g. 32+ bytes, hex/base64). Never hardcode. |
 | `PRIVACY_HMAC_KEY` | Recommended | Separate long random secret for source pseudonymization. If unset, the app falls back to `SECRET_KEY` for existing HMAC behavior; set a distinct value in production. |
+| `DATABASE_URL` | Yes (Neon/PostgreSQL) | Neon PostgreSQL connection string for a **fresh, empty** database (e.g. `postgresql://...?...sslmode=require`). Never commit. |
 | `FLASK_DEBUG` | Yes | `0` |
-| `DATABASE_PATH` | Yes (for persistence) | `/var/data/app.db` on a Render Persistent Disk (fresh DB only). |
 | `SESSION_COOKIE_SECURE` | Recommended | `true` |
 | `TRUST_PROXY_HEADERS` | Recommended | `true` (`RENDER` is also honored by the app for proxy header trust). |
 | `MANUAL_DETECTION_LAB` | Yes | `false` |
 | `SOC_DEMO_MODE` | Yes | `false` |
 | `AUTH_EVENT_RETENTION_ENABLED` | Recommended | `true` (or as policy requires) |
 | `AUTH_EVENT_RETENTION_DAYS` | Recommended | `90` (or as policy requires) |
-| `WEB_CONCURRENCY` | Optional | Not required when using the recommended fixed `--workers 1` start command for SQLite. |
+| `ADMIN_PROVISIONING_CODE` | Only if provisioning an admin | Strong one-time/shared provisioning code used by `scripts/provision_administrator.py --confirm`; do not reuse app secrets. |
+| `DATABASE_PATH` | Not required for Neon | Local SQLite path only when `DATABASE_URL` is not set. Do not point to `instance/research.db` in production. |
 
-Do not set `FLASK_DEBUG=1`, do not enable demo/manual-lab modes, and do not provide paths to local development databases.
+Do not set `FLASK_DEBUG=1`, do not enable demo/manual-lab modes, and do not provide local database files or credentials.
 
-## 6. Deployment steps (Render)
+## 6. Database setup steps (fresh Neon PostgreSQL)
+
+1. **Create/select a fresh Neon database** (empty). Do not copy `instance/research.db` or any local records.
+2. **Set `DATABASE_URL`** in Render to the Neon connection string.
+3. **Initialize schema (safe, idempotent, no data copied):**
+   - Automatic: the application initializes required tables when it starts handling requests.
+   - Optional explicit pre-initialization in the Render environment with the same `DATABASE_URL`:
+     ```bash
+     python scripts/prepare_production_database.py --use-database-url
+     ```
+     (Or simply run the script with `DATABASE_URL` configured; it will initialize PostgreSQL when no SQLite `--database-path` is provided.)
+4. **Provision an administrator only if required (controlled, explicit, no default password):**
+   - Ensure `DATABASE_URL`, `SECRET_KEY`, and `ADMIN_PROVISIONING_CODE` are set in a secure Render shell/environment.
+   - Run:
+     ```bash
+     python scripts/provision_administrator.py --username <admin-username> --confirm
+     ```
+   - Provide the provisioning code and a strong administrator password when prompted. No default administrator credentials exist.
+
+## 7. Deployment steps (Render)
 
 1. **Prepare repository content (local, no upload performed by this task):**
-   - Ensure `wsgi.py`, `requirements.txt` (includes `gunicorn`), `model_artifacts/decision_tree.joblib`, and this document are included.
+   - Ensure `wsgi.py`, `requirements.txt` (includes `gunicorn` and `psycopg[binary]`), `model_artifacts/decision_tree.joblib`, and this document are included.
    - Confirm `.env`, `instance/*.db`, credentials, logs, and virtual environments are not committed.
 2. **Create a Render Web Service** from the repository/branch (Python runtime).
 3. **Configure commands:**
    - Build: `pip install --upgrade pip && pip install -r requirements.txt`
-   - Start: `gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120 wsgi:app`
-4. **Add a Persistent Disk** (recommended for SQLite durability), mount e.g. `/var/data`.
-5. **Set environment variables** as listed above; generate strong random values for secrets.
-6. **Provision the database path (fresh/empty DB):**
-   - Set `DATABASE_PATH` to a fresh file on the persistent disk (for example `/var/data/app.db`), **not** `instance/research.db`.
-   - The app creates parent directories and initializes required tables on startup/request (`app.models.db.initialize`), so the production database starts empty with a safe schema initialization process.
-   - Optional pre-initialization (safe, no effect on local databases): run in the Render environment with the same `DATABASE_PATH`:
-     ```bash
-     python scripts/prepare_production_database.py --database-path /var/data/app.db
-     ```
-   - Do not create a default administrator password. If an admin account is required, provision it explicitly in a controlled secure shell with required env vars set (including `ADMIN_PROVISIONING_CODE`, `SECRET_KEY`, and the production `DATABASE_PATH`):
-     ```bash
-     python scripts/provision_administrator.py --username <admin-username> --confirm
-     ```
-7. **Deploy and verify:**
+   - Start: `gunicorn --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120 wsgi:app`
+4. **Set environment variables** as listed above (including `DATABASE_URL` for Neon); generate strong random values for secrets.
+5. **Initialize/provision the database** as described in section 6 (fresh/empty schema, no copied data, no default admin).
+6. **Deploy and verify:**
    - Check `GET /health` returns `200 {"status":"ok"}`.
-   - Confirm HTTPS is enforced by Render and secure cookies/HSTS behavior are correct.
-   - Verify admin login/provisioning flow, dashboard access, non-admin restrictions, and that `/admin/manual-detection*` endpoints are not accessible in production.
-8. **Post-deploy checks:** review logs, rate limiting, retention settings, and backup/restore for the persistent disk. Keep the database empty of real user data unless and until a separate, approved data-handling plan exists.
+   - Confirm HTTPS/secure cookies/proxy behavior.
+   - Verify registration, login, admin authorization (admin-only access), and that `/admin/manual-detection*` endpoints are not accessible in production.
+   - Verify login events/security alerts persist in the PostgreSQL database during validation (without importing local records).
 
-## 7. Security notes
+## 8. Security notes
 
-- SQLite is suitable for a controlled prototype but has concurrency and durability limits on hosted platforms; use a persistent disk and keep worker/concurrency conservative, or migrate separately to a managed database for production needs.
+- PostgreSQL (Neon) is preferred over SQLite for Render durability and concurrency on hosted/free environments.
 - Public registration never grants admin privileges; administrator provisioning remains a separate controlled action.
-- This preparation does not deploy to Render, upload to GitHub, or modify the original `instance/research.db`.
+- `.gitignore` excludes `.env*` (except `.env.example`), database files, credentials/keys, virtual environments, logs, and local instance contents.
+- This preparation does not deploy to Render, upload to GitHub, modify `instance/research.db`, or change the trained Decision Tree / existing local user accounts.

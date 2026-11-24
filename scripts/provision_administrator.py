@@ -58,6 +58,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--username", required=True)
     parser.add_argument(
+        "--database-path",
+        help="Optional SQLite database file path. If omitted, the configured database target is used.",
+    )
+    parser.add_argument(
+        "--use-database-url",
+        action="store_true",
+        help="Provision the administrator in the PostgreSQL database configured by DATABASE_URL.",
+    )
+    parser.add_argument(
         "--confirm",
         action="store_true",
         help="Explicit confirmation that administrator access is intended.",
@@ -82,7 +91,14 @@ def main() -> None:
     if strength_error:
         raise SystemExit(strength_error)
 
-    connection = connect()
+    if args.database_path:
+        target = args.database_path
+    elif args.use_database_url:
+        target = os.getenv("DATABASE_URL", "").strip() or None
+    else:
+        target = None
+
+    connection = connect(target)
     try:
         initialize(connection)
         result = provision_administrator(
